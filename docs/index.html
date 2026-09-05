@@ -65,6 +65,8 @@
     .tag { padding:6px 10px; border:1px solid var(--line); color:var(--ink); font:.72rem var(--mono); }
     .quote { padding:30px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); color:var(--ink); font:600 clamp(1.5rem,3vw,2.6rem)/1.25 var(--display); }
     .quote span { color:var(--mint); }
+    .mermaid-wrap { padding:28px; overflow-x:auto; border:1px solid var(--line); background:rgba(8,18,30,.55); }
+    .mermaid { min-width:680px; color:var(--ink); }
     .status { display:flex; align-items:center; gap:12px; margin-top:24px; color:var(--ink); font-weight:700; }
     .status-dot { width:9px; height:9px; border-radius:50%; background:var(--gold); box-shadow:0 0 14px var(--gold); }
     footer { padding:38px 0 48px; border-top:1px solid var(--line); color:var(--muted); font-size:.8rem; }
@@ -122,6 +124,39 @@
                                           |
                                           v
                                   SPECIALIST RESULT</pre></div><div class="flow"><div class="flow-step"><strong>Orchestrator executor</strong><span>Invokes and coordinates specialist work.</span></div><div class="flow-step"><strong>Specialist executor</strong><span>Performs operational work and tool calls.</span></div><div class="flow-step"><strong>Shared infrastructure</strong><span>May be reused without blurring responsibilities.</span></div></div></div></section>
+    <section><div class="container"><div class="section-heading"><div><div class="eyebrow">04.1 / graph visualizations</div><h2>Two levels of orchestration.</h2></div><p class="lead">The main orchestrator decides which specialist subgraphs are needed. Each specialist then runs its own focused planning, tool execution, collection, evaluation, and synthesis loop.</p></div><div class="split"><div><div class="label">Specialist astrologer agent</div><div class="mermaid-wrap"><div class="mermaid">flowchart TD
+  START((Start)) --> A[Planner]
+  A --> B(Executor)
+  B -->|Tool Worker| C(Collector)
+  C --> D{Evaluator}
+  D -->|Yes| E(Synthesizer)
+  D -->|No| A
+  E --> END((End))
+  classDef start fill:#123442,stroke:#f4c878,color:#f4c878
+  classDef process fill:#123442,stroke:#9de1c2,color:#dce8e8
+  classDef decision fill:#3c2930,stroke:#ef947c,color:#dce8e8
+  class START,END start
+  class A,B,C,E process
+  class D decision</div></div></div><div><div class="label">Main orchestrator</div><div class="mermaid-wrap"><div class="mermaid">flowchart TD
+  U[User Question] --> M[Astrologer Manager]
+  M --> P[Orchestrator Planner]
+  P --> X[Orchestrator Executor]
+  X --> S1[Career Specialist]
+  X --> S2[Sports Specialist]
+  X --> S3[Love Specialist]
+  S1 --> C[Result Collector]
+  S2 --> C
+  S3 --> C
+  C --> D{Results sufficient?}
+  D -->|No| P
+  D -->|Yes| Y[Synthesizer]
+  Y --> F[Final Answer]
+  classDef start fill:#123442,stroke:#f4c878,color:#f4c878
+  classDef process fill:#123442,stroke:#9de1c2,color:#dce8e8
+  classDef decision fill:#3c2930,stroke:#ef947c,color:#dce8e8
+  class U,F start
+  class M,P,X,S1,S2,S3,C,Y process
+  class D decision</div></div></div></div></div></section>
     <section id="methodologies"><div class="container"><div class="section-heading"><div><div class="eyebrow">05 / knowledge layer</div><h2>Retrieve what the question needs.</h2></div><p class="lead">The knowledge system is designed to scale by retrieving relevant material for the specific query, specialist, and methodology instead of loading everything into an agent's context.</p></div><div class="split"><div class="diagram"><pre>KNOWLEDGE BASE
 |
 +-- VEDIC
@@ -154,6 +189,10 @@ SPECIALIST · SPECIALIST · SPECIALIST
         v
     ANALYSIS -> EVALUATION -> SYNTHESIS -> FINAL ANSWER</pre></div></div></section>
   </main>
-  <footer><div class="container"><span>AstroWeave</span><span>Python · LangGraph · LangChain</span></div></footer>
+  <footer><div class="container"><span>AstroWeave</span><span>Python · LangGraph · LangChain</span><span>Built by chamanthmvs</span></div></footer>
+  <script type="module">
+    import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
+    mermaid.initialize({ startOnLoad: true, theme: "base", themeVariables: { primaryColor: "#123442", primaryTextColor: "#dce8e8", primaryBorderColor: "#9de1c2", lineColor: "#9de1c2", secondaryColor: "#3c2930", tertiaryColor: "#102b34", fontFamily: "Manrope, sans-serif" } });
+  </script>
 </body>
 </html>
