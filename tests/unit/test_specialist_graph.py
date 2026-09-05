@@ -2,7 +2,7 @@ import unittest
 
 from langgraph.errors import GraphRecursionError
 
-from astroweave.graphs.specialists.specialist_graph import build_specialist_graph
+from astroweave.graphs.specialist.specialist_graph import build_specialist_graph
 
 
 class SpecialistGraphTests(unittest.TestCase):

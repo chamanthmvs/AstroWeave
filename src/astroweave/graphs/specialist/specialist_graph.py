@@ -2,8 +2,8 @@ from collections.abc import Mapping
 
 from langgraph.graph import END, START, StateGraph
 
-from astroweave.state.context import Context
-from astroweave.state.state import State
+from astroweave.common.context import Context
+from astroweave.common.state import State
 
 
 def _pass_through(state: State) -> State:
