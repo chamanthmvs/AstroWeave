@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="AstroWeave is a hierarchical multi-agent astrology system built with LangGraph.">
+  <title>AstroWeave | Astrology, orchestrated</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
+  <style>
+    :root { --night:#08121e; --ink:#dce8e8; --muted:#8ca4a7; --line:rgba(165,208,204,.18); --mint:#9de1c2; --gold:#f4c878; --coral:#ef947c; --panel:rgba(18,42,54,.72); --mono:"DM Mono",monospace; --body:"Manrope",sans-serif; --display:"Playfair Display",serif; }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body { margin:0; color:var(--ink); background:var(--night); font-family:var(--body); line-height:1.65; }
+    body::before { position:fixed; inset:0; z-index:-2; content:""; opacity:.55; background-image:radial-gradient(circle at 12% 20%,rgba(157,225,194,.15) 0 1px,transparent 1.5px),radial-gradient(circle at 74% 34%,rgba(244,200,120,.2) 0 1px,transparent 1.5px),radial-gradient(circle at 42% 76%,rgba(239,148,124,.13) 0 1px,transparent 1.5px); background-size:180px 180px,230px 230px,310px 310px; }
+    body::after { position:fixed; inset:0; z-index:-1; content:""; background:linear-gradient(130deg,#08121e 0%,#0b1c2a 45%,#102b34 100%); opacity:.88; }
+    a { color:inherit; }
+    .container { width:min(1120px,calc(100% - 40px)); margin:0 auto; }
+    .eyebrow,.label { color:var(--gold); font:500 .72rem/1.2 var(--mono); letter-spacing:.14em; text-transform:uppercase; }
+    .site-header { border-bottom:1px solid var(--line); background:rgba(8,18,30,.72); backdrop-filter:blur(16px); }
+    .nav { display:flex; align-items:center; justify-content:space-between; min-height:72px; }
+    .brand { display:flex; gap:12px; align-items:center; color:var(--ink); text-decoration:none; font-weight:800; }
+    .brand-mark { display:grid; width:34px; height:34px; place-items:center; border:1px solid var(--mint); border-radius:50%; color:var(--mint); font-family:var(--display); font-size:1.25rem; }
+    .nav-links { display:flex; gap:24px; color:var(--muted); font-size:.84rem; }
+    .nav-links a { text-decoration:none; }
+    .nav-links a:hover { color:var(--mint); }
+    .hero { padding:112px 0 92px; position:relative; overflow:hidden; }
+    .hero-grid { display:grid; grid-template-columns:1.05fr .95fr; gap:72px; align-items:center; }
+    h1,h2,h3 { margin:0; line-height:1.1; }
+    h1 { max-width:730px; margin-top:18px; font:700 clamp(3.5rem,8vw,7rem)/.94 var(--display); letter-spacing:-.045em; }
+    h1 em { color:var(--mint); font-style:normal; }
+    .hero-copy { max-width:620px; margin:28px 0 34px; color:#afc2c1; font-size:1.1rem; }
+    .button-row { display:flex; flex-wrap:wrap; gap:12px; }
+    .button { display:inline-block; padding:11px 17px; border:1px solid var(--mint); color:var(--night); background:var(--mint); font-size:.85rem; font-weight:800; text-decoration:none; }
+    .button.secondary { color:var(--ink); background:transparent; border-color:var(--line); }
+    .hero-art { min-height:390px; position:relative; display:grid; place-items:center; }
+    .orbit { width:min(360px,75vw); aspect-ratio:1; position:relative; border:1px solid rgba(157,225,194,.32); border-radius:50%; transform:rotate(-18deg); }
+    .orbit::before,.orbit::after { position:absolute; content:""; inset:10%; border:1px solid rgba(244,200,120,.31); border-radius:50%; }
+    .orbit::after { inset:25%; border-color:rgba(239,148,124,.3); }
+    .core { width:116px; height:116px; display:grid; place-items:center; position:absolute; inset:0; margin:auto; border:1px solid var(--gold); border-radius:50%; color:var(--gold); background:#112b35; font:500 .66rem var(--mono); letter-spacing:.08em; text-align:center; text-transform:uppercase; }
+    .planet { position:absolute; width:15px; height:15px; border-radius:50%; background:var(--coral); box-shadow:0 0 22px rgba(239,148,124,.75); }
+    .planet.one { top:12%; left:28%; } .planet.two { right:4%; bottom:31%; background:var(--mint); box-shadow:0 0 22px rgba(157,225,194,.75); } .planet.three { left:18%; bottom:13%; width:9px; height:9px; background:var(--gold); }
+    .orbit-caption { position:absolute; right:5%; bottom:4%; color:var(--muted); font:.68rem var(--mono); letter-spacing:.08em; text-transform:uppercase; }
+    section { padding:96px 0; border-top:1px solid var(--line); }
+    .section-heading { display:grid; grid-template-columns:.7fr 1.3fr; gap:40px; margin-bottom:46px; }
+    h2 { font:600 clamp(2rem,4vw,3.4rem)/1 var(--display); letter-spacing:-.03em; }
+    h3 { margin-bottom:12px; font-size:1.08rem; color:var(--mint); }
+    p { margin:0; color:var(--muted); }
+    .lead { max-width:680px; font-size:1.08rem; }
+    .cards { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
+    .card { padding:25px; border:1px solid var(--line); background:var(--panel); }
+    .card p { font-size:.92rem; }
+    .card-number { display:block; margin-bottom:38px; color:var(--gold); font:.72rem var(--mono); }
+    .split,.methodology { display:grid; grid-template-columns:1fr 1fr; gap:18px; }
+    .diagram { padding:28px; overflow-x:auto; border:1px solid var(--line); background:rgba(8,18,30,.55); }
+    pre { margin:0; color:#b8d5ca; font:.8rem/1.65 var(--mono); white-space:pre; }
+    .flow { display:flex; flex-wrap:wrap; align-items:stretch; gap:8px; margin-top:26px; }
+    .flow-step { flex:1 1 130px; padding:16px; border-left:2px solid var(--mint); background:rgba(18,42,54,.72); }
+    .flow-step strong { display:block; margin-bottom:4px; color:var(--ink); font-size:.85rem; }
+    .flow-step span { color:var(--muted); font-size:.74rem; }
+    .methodology .card:first-child { border-color:rgba(157,225,194,.42); }
+    .methodology .card:last-child { border-color:rgba(244,200,120,.42); }
+    .tag-list { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; }
+    .tag { padding:6px 10px; border:1px solid var(--line); color:var(--ink); font:.72rem var(--mono); }
+    .quote { padding:30px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); color:var(--ink); font:600 clamp(1.5rem,3vw,2.6rem)/1.25 var(--display); }
+    .quote span { color:var(--mint); }
+    .status { display:flex; align-items:center; gap:12px; margin-top:24px; color:var(--ink); font-weight:700; }
+    .status-dot { width:9px; height:9px; border-radius:50%; background:var(--gold); box-shadow:0 0 14px var(--gold); }
+    footer { padding:38px 0 48px; border-top:1px solid var(--line); color:var(--muted); font-size:.8rem; }
+    footer .container { display:flex; justify-content:space-between; gap:20px; }
+    @media (max-width:800px) { .hero { padding-top:76px; } .hero-grid,.section-heading,.split,.methodology { grid-template-columns:1fr; gap:34px; } .hero-art { min-height:310px; } .cards { grid-template-columns:1fr; } .nav-links { display:none; } section { padding:70px 0; } }
+    @media (prefers-reduced-motion:no-preference) { .hero-grid { animation:enter .8s ease both; } @keyframes enter { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:none; } } }
+  </style>
+</head>
+<body>
+  <header class="site-header"><nav class="container nav" aria-label="Primary navigation"><a class="brand" href="#top"><span class="brand-mark">A</span> AstroWeave</a><div class="nav-links"><a href="#architecture">Architecture</a><a href="#methodologies">Methodologies</a><a href="#roadmap">Scope</a></div></nav></header>
+  <main id="top">
+    <section class="hero"><div class="container hero-grid"><div><div class="eyebrow">LangGraph · multi-agent astrology</div><h1>Astrology, <em>orchestrated.</em></h1><p class="hero-copy">AstroWeave is a hierarchical reasoning system where a central Astrologer Manager coordinates specialists, methodologies, tools, and knowledge to turn one natural-language question into one considered answer.</p><div class="button-row"><a class="button" href="#architecture">Explore the architecture</a><a class="button secondary" href="#roadmap">View development scope</a></div></div><div class="hero-art" aria-label="Abstract orbit illustration"><div class="orbit"><div class="core">Astrologer<br>Manager</div><i class="planet one"></i><i class="planet two"></i><i class="planet three"></i></div><div class="orbit-caption">many signals / one constellation</div></div></div></section>
+    <section id="architecture"><div class="container"><div class="section-heading"><div><div class="eyebrow">01 / the system</div><h2>One question. Multiple perspectives.</h2></div><p class="lead">A user should not need to know which specialist, astrology system, tool, or knowledge source is required. AstroWeave determines how the question should be analyzed, delegates the work, evaluates the results, and coordinates the final synthesis.</p></div><div class="diagram"><pre>USER QUESTION
+      |
+      v
++----------------------+        Understands intent
+|  ASTROLOGER MANAGER  |        and coordinates work
++----------+-----------+
+           v
+        PLANNER -------> EXECUTOR
+                            |
+                            v
+                SPECIALIST SUBGRAPH(S)
+                            |
+                            v
+                   COLLECTOR / EVALUATOR
+                      |                 |
+                Insufficient          Ready
+                      |                 |
+                      +--> RE-PLAN      v
+                                  SYNTHESIZER
+                                        |
+                                        v
+                                  FINAL ANSWER</pre></div></div></section>
+    <section><div class="container"><div class="section-heading"><div><div class="eyebrow">02 / the distinction</div><h2>Domain is not methodology.</h2></div><p class="lead">AstroWeave keeps the subject of a question separate from the system used to interpret it. That boundary is the foundation for adding new specialists and new methodologies without rebuilding the architecture.</p></div><div class="methodology"><article class="card"><span class="card-number">DOMAIN SPECIALIZATION</span><h3>What is the question about?</h3><p>Independent specialists can focus on the areas users actually ask about.</p><div class="tag-list"><span class="tag">Sports</span><span class="tag">Relationships</span><span class="tag">Career</span><span class="tag">Education</span><span class="tag">Finance</span></div></article><article class="card"><span class="card-number">ASTROLOGY METHODOLOGY</span><h3>Which system should analyze it?</h3><p>Vedic and KP are analytical methodologies that can be selected by the user or the system.</p><div class="tag-list"><span class="tag">Vedic</span><span class="tag">KP</span><span class="tag">Both</span><span class="tag">System-selected</span></div></article></div></div></section>
+    <section><div class="container"><div class="section-heading"><div><div class="eyebrow">03 / the manager</div><h2>Coordination above complexity.</h2></div><p class="lead">The Astrologer Manager is the top-level intelligence. It coordinates the system without absorbing the detailed reasoning logic of every specialist.</p></div><div class="cards"><article class="card"><span class="card-number">01</span><h3>Understand</h3><p>Receive the user's query, identify intent, and determine which domain or domains are relevant.</p></article><article class="card"><span class="card-number">02</span><h3>Delegate</h3><p>Decompose the work, create an execution plan, and invoke the appropriate specialist subgraph.</p></article><article class="card"><span class="card-number">03</span><h3>Evaluate</h3><p>Collect results, determine whether they are sufficient, and request additional work when needed.</p></article></div></div></section>
+    <section><div class="container"><div class="section-heading"><div><div class="eyebrow">04 / specialist graphs</div><h2>Specialists work within their own orbit.</h2></div><p class="lead">A specialist is more than a function call. It can be an independently structured LangGraph subgraph with its own plan, tools, evaluation loop, and specialist result.</p></div><div class="diagram"><pre>SPECIALIST ASTROLOGER
+          |
+          v
+       PLANNER
+          |
+          v
+       EXECUTOR -------> Tool A · Tool B · Tool C
+          |                         |
+          +-------------------------+
+                                    v
+                                COLLECTOR
+                                    |
+                                    v
+                                EVALUATOR
+                              |           |
+                       Insufficient   Sufficient
+                              |           |
+                           RE-PLAN    SYNTHESIZE
+                                          |
+                                          v
+                                  SPECIALIST RESULT</pre></div><div class="flow"><div class="flow-step"><strong>Orchestrator executor</strong><span>Invokes and coordinates specialist work.</span></div><div class="flow-step"><strong>Specialist executor</strong><span>Performs operational work and tool calls.</span></div><div class="flow-step"><strong>Shared infrastructure</strong><span>May be reused without blurring responsibilities.</span></div></div></div></section>
+    <section id="methodologies"><div class="container"><div class="section-heading"><div><div class="eyebrow">05 / knowledge layer</div><h2>Retrieve what the question needs.</h2></div><p class="lead">The knowledge system is designed to scale by retrieving relevant material for the specific query, specialist, and methodology instead of loading everything into an agent's context.</p></div><div class="split"><div class="diagram"><pre>KNOWLEDGE BASE
+|
++-- VEDIC
+|   +-- ...
+|   +-- ...
+|
++-- KP
+    +-- ...
+    +-- ...</pre></div><div class="diagram"><pre>USER QUERY + SPECIALIST + METHODOLOGY
+                    |
+                    v
+          RELEVANT KNOWLEDGE RETRIEVAL
+                    |
+                    v
+             SPECIALIST ANALYSIS</pre></div></div></div></section>
+    <section><div class="container"><div class="section-heading"><div><div class="eyebrow">06 / the loop</div><h2>Reasoning can return to the planner.</h2></div><p class="lead">Results are not treated as finished merely because a tool ran. AstroWeave evaluates whether it has enough information, whether another specialist is needed, or whether another methodology should be considered.</p></div><div class="quote">“The synthesizer should not concatenate outputs. It should make the result coherent while preserving <span>meaningful methodological differences.</span>”</div></div></section>
+    <section id="roadmap"><div class="container"><div class="section-heading"><div><div class="eyebrow">07 / foundation first</div><h2>Designed to grow deliberately.</h2></div><p class="lead">The first phase establishes the architecture before attempting to implement the entire astrology reasoning system.</p></div><div class="cards"><article class="card"><span class="card-number">STRUCTURE</span><h3>Boundaries</h3><p>Project structure, agent boundaries, shared state, and LangGraph subgraphs.</p></article><article class="card"><span class="card-number">CAPABILITIES</span><h3>Knowledge and tools</h3><p>Methodology boundaries, retrieval boundaries, tool isolation, and specialist capabilities.</p></article><article class="card"><span class="card-number">COORDINATION</span><h3>Communication</h3><p>Evaluation loops, multi-agent communication, and a clear path to final synthesis.</p></article></div><div class="status"><span class="status-dot"></span> Under active development</div></div></section>
+    <section><div class="container"><div class="section-heading"><div><div class="eyebrow">08 / the constellation</div><h2>One coordinated system.</h2></div><p class="lead">AstroWeave is not a collection of independent astrology chatbots. It is a coordinated system of specialized reasoning agents operating under a central orchestration layer.</p></div><div class="diagram"><pre>ONE USER QUESTION
+        |
+        v
+INTELLIGENT MANAGER
+        |
+   +----+----+
+   v    v    v
+SPECIALIST · SPECIALIST · SPECIALIST
+        |
+        v
+  VEDIC  o  KP
+        |
+        v
+    ANALYSIS -> EVALUATION -> SYNTHESIS -> FINAL ANSWER</pre></div></div></section>
+  </main>
+  <footer><div class="container"><span>AstroWeave</span><span>Python · LangGraph · LangChain</span></div></footer>
+</body>
+</html>
