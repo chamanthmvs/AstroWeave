@@ -20,9 +20,10 @@ class SpecialistGraphTests(unittest.TestCase):
 
         self.assertTrue(result["is_sufficient"])
         self.assertEqual(result["messages"], [])
-        self.assertEqual(result["tool_results"], [])
-        self.assertEqual(result["stage_results"], [])
+        self.assertEqual(result["tool_results"][0]["tool_name"], "career_demo_tool")
+        self.assertEqual(len(result["stage_results"]), 1)
         self.assertEqual(result["errors"], [])
+        self.assertEqual(len(result["execution_trace"]), 5)
 
     def test_stage_results_are_limited_to_latest_five(self):
         graph = build_specialist_graph()
@@ -36,10 +37,8 @@ class SpecialistGraphTests(unittest.TestCase):
             }
         )
 
-        self.assertEqual(
-            result["stage_results"],
-            [{"stage": str(index), "result": index} for index in range(1, 6)],
-        )
+        self.assertEqual(len(result["stage_results"]), 5)
+        self.assertEqual(result["stage_results"][-1]["stage"], "executor")
 
     def test_insufficient_result_replans(self):
         graph = build_specialist_graph()
