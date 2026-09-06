@@ -201,6 +201,10 @@ if submitted:
                 st.success(body.get("answer", "Request completed."))
                 with st.expander("Final state", expanded=True):
                     st.json(body.get("state", {}))
+                with st.expander("Context schema values"):
+                    st.json(body.get("context", {}))
+                with st.expander("RunnableConfig values"):
+                    st.json(body.get("runnable_config", {}))
                 with st.expander("Execution trace"):
                     for event in body.get("execution_trace", []):
                         step = event.get("step", "?")
@@ -208,7 +212,15 @@ if submitted:
                         action = event.get("action", event.get("message", ""))
                         st.markdown(f"**STEP-{step} · ENTRY POINT: `{entry_point}`**")
                         st.write(f"**What happened:** {action}")
-                        st.json({"context": event.get("context", {}), "runnable_config": event.get("runnable_config", {})})
+                        with st.container(border=True):
+                            st.caption("State keys at entry")
+                            st.code(", ".join(event.get("state_keys", [])))
+                            st.json(
+                                {
+                                    "context": event.get("context", {}),
+                                    "runnable_config": event.get("runnable_config", {}),
+                                }
+                            )
             else:
                 st.error(f"API returned HTTP {response.status_code}: {response.text}")
 

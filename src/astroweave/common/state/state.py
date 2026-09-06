@@ -20,6 +20,16 @@ class StageResult(TypedDict):
     result: Any
 
 
+class ExecutionEvent(TypedDict):
+    step: int
+    entry_point: str
+    node: str
+    action: str
+    state_keys: list[str]
+    context: dict[str, Any]
+    runnable_config: dict[str, Any]
+
+
 def keep_latest_five(
     current: list[StageResult], update: list[StageResult]
 ) -> list[StageResult]:
@@ -42,3 +52,6 @@ class State(TypedDict, total=False):
     answer: str
     errors: Annotated[list[str], operator.add]
     is_sufficient: bool
+    selected_specialists: list[str]
+    specialist_results: Annotated[list[dict[str, Any]], operator.add]
+    execution_trace: Annotated[list[ExecutionEvent], operator.add]

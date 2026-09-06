@@ -16,7 +16,7 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {"status": "ok", "service": "astroweave-api"})
 
-    def test_run_endpoint_is_reserved_for_next_branch(self):
+    def test_run_executes_demo_flow(self):
         response = self.client.post(
             "/run",
             json={
@@ -27,8 +27,19 @@ class ApiTests(unittest.TestCase):
             },
         )
 
-        self.assertEqual(response.status_code, 501)
-        self.assertIn("not implemented", response.json()["detail"])
+        self.assertEqual(response.status_code, 200)
+        body = response.json()
+        self.assertIn("Demo orchestration completed", body["answer"])
+        self.assertEqual(body["context"]["conversation_id"], "conversation-1")
+        self.assertEqual(
+            body["runnable_config"]["configurable"]["thread_id"],
+            "conversation-1",
+        )
+        self.assertGreaterEqual(len(body["execution_trace"]), 10)
+        self.assertEqual(
+            [event["step"] for event in body["execution_trace"]],
+            list(range(1, len(body["execution_trace"]) + 1)),
+        )
 
     def test_run_requires_query(self):
         response = self.client.post(
