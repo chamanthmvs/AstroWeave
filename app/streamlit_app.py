@@ -1,37 +1,180 @@
+from __future__ import annotations
+
+from uuid import uuid4
+
 import httpx
 import streamlit as st
 
+from auth import authenticate_user, create_user, load_users
+
 
 st.set_page_config(
-    page_title="AstroWeave",
+    page_title="AstroWeave | Personal astrology workspace",
     page_icon="✦",
     layout="wide",
+    initial_sidebar_state="expanded",
 )
 
 
-st.title("AstroWeave")
-st.caption("Hierarchical multi-agent astrology system")
+st.markdown(
+    """
+    <style>
+    @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap');
 
+    :root {
+        --ink: #e6efed;
+        --muted: #91aaa8;
+        --line: rgba(164, 210, 198, .16);
+        --mint: #a6e4c5;
+        --gold: #f5cc80;
+        --coral: #ef967d;
+        --deep: #07131e;
+    }
+
+    .stApp {
+        color: var(--ink);
+        background: radial-gradient(circle at 84% 9%, rgba(239, 150, 125, .11), transparent 26rem),
+                    radial-gradient(circle at 20% 70%, rgba(166, 228, 197, .08), transparent 30rem),
+                    linear-gradient(135deg, #07131e 0%, #0d222d 58%, #102f37 100%);
+    }
+    [data-testid="stHeader"] { background: rgba(7, 19, 30, .5); }
+    [data-testid="stSidebar"] { background: rgba(5, 16, 26, .82); border-right: 1px solid var(--line); }
+    [data-testid="stSidebar"] > div:first-child { padding-top: 2rem; }
+    .block-container { max-width: 1180px; padding-top: 3.5rem; padding-bottom: 4rem; }
+    .brand { display: flex; align-items: center; gap: .7rem; margin-bottom: 2.6rem; color: var(--ink); font: 800 1.05rem Manrope, sans-serif; }
+    .brand-mark { display: block; width: 2.25rem; height: 2.25rem; position: relative; border: 1px solid var(--mint); border-radius: 50%; transform: rotate(-24deg); }
+    .brand-mark::before, .brand-mark::after { content: ''; position: absolute; border: 1px solid var(--gold); border-radius: 50%; }
+    .brand-mark::before { inset: .42rem -.22rem; }
+    .brand-mark::after { width: .36rem; height: .36rem; top: .08rem; right: .15rem; border: 0; background: var(--coral); box-shadow: -.95rem 1.7rem 0 -.04rem var(--mint); }
+    .eyebrow { color: var(--gold); font: 500 .7rem 'DM Mono', monospace; letter-spacing: .14em; text-transform: uppercase; }
+    h1, h2, h3 { font-family: 'Playfair Display', serif !important; letter-spacing: -.025em; }
+    h1 { font-size: clamp(2.6rem, 5vw, 4.8rem) !important; line-height: .98 !important; max-width: 720px; }
+    h1 em { color: var(--mint); font-style: normal; }
+    h2 { font-size: 1.8rem !important; }
+    .intro { max-width: 690px; color: var(--muted); font-size: 1.05rem; }
+    .workspace-label { margin: 2.8rem 0 .7rem; color: var(--muted); font: .7rem 'DM Mono', monospace; letter-spacing: .12em; text-transform: uppercase; }
+    .profile { padding: 1.1rem; border: 1px solid var(--line); background: rgba(20, 48, 57, .58); }
+    .avatar { display: grid; width: 2.8rem; height: 2.8rem; place-items: center; margin-bottom: .75rem; border: 1px solid var(--gold); border-radius: 50%; color: var(--gold); background: rgba(245, 204, 128, .08); font: 700 1rem Manrope, sans-serif; }
+    .profile-name { color: var(--ink); font-weight: 800; }
+    .profile-email { overflow: hidden; color: var(--muted); font-size: .75rem; text-overflow: ellipsis; white-space: nowrap; }
+    .side-meta { display: grid; grid-template-columns: 1fr 1fr; gap: .5rem; margin: 1.1rem 0; }
+    .meta-item { padding: .65rem; border-top: 1px solid var(--line); }
+    .meta-value { display: block; margin-top: .22rem; color: var(--ink); font-weight: 700; }
+    .meta-label { color: var(--muted); font: .63rem 'DM Mono', monospace; letter-spacing: .05em; text-transform: uppercase; }
+    .panel { padding: 1.5rem; border: 1px solid var(--line); background: rgba(9, 27, 37, .68); }
+    .panel-title { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
+    .panel-title h3 { margin: 0; color: var(--ink); font-size: 1.25rem; }
+    .status { color: var(--mint); font: .7rem 'DM Mono', monospace; text-transform: uppercase; }
+    .stTextArea textarea, .stTextInput input { border-color: var(--line); background: rgba(5, 16, 26, .56); }
+    .stTextArea textarea:focus, .stTextInput input:focus { border-color: var(--mint); }
+    .stButton > button, .stFormSubmitButton > button { min-height: 2.7rem; border: 1px solid var(--mint); border-radius: 0; color: var(--deep); background: var(--mint); font-weight: 800; }
+    .stButton > button:hover, .stFormSubmitButton > button:hover { border-color: var(--gold); color: var(--deep); background: var(--gold); }
+    div[data-testid="stExpander"] { border-color: var(--line); background: rgba(9, 27, 37, .48); }
+    .hint { padding: .95rem 1rem; border-left: 2px solid var(--gold); color: var(--muted); background: rgba(245, 204, 128, .06); font-size: .84rem; }
+    .auth-shell { max-width: 500px; margin: 10vh auto 0; }
+    .auth-note { margin: .9rem 0 1.5rem; color: var(--muted); }
+    @media (max-width: 700px) { .block-container { padding-top: 2rem; } h1 { font-size: 3rem !important; } }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+if "users" not in st.session_state:
+    st.session_state.users = load_users()
+if "user" not in st.session_state:
+    st.session_state.user = None
+if "auth_mode" not in st.session_state:
+    st.session_state.auth_mode = "Sign in"
+
+
+def initials(name: str) -> str:
+    return "".join(part[0] for part in name.split()[:2]).upper() or "AW"
+
+
+def render_auth() -> None:
+    st.markdown('<div class="auth-shell">', unsafe_allow_html=True)
+    st.markdown('<div class="brand"><span class="brand-mark" aria-hidden="true"></span> AstroWeave</div>', unsafe_allow_html=True)
+    st.markdown('<div class="eyebrow">Specialist astrology, thoughtfully coordinated</div>', unsafe_allow_html=True)
+    st.title("Your questions, read from every angle.")
+    st.markdown('<p class="auth-note">Sign in to continue your astrology workspace, or create an account to begin a new reading.</p>', unsafe_allow_html=True)
+
+    mode = st.radio("Account access", ["Sign in", "Create account"], horizontal=True, label_visibility="collapsed")
+    with st.form("auth_form"):
+        name = st.text_input("Your name", placeholder="e.g. Maya Patel") if mode == "Create account" else ""
+        email = st.text_input("Email", placeholder="you@example.com")
+        password = st.text_input("Password", type="password", placeholder="Enter your password")
+        submitted = st.form_submit_button("Continue", use_container_width=True)
+
+    if submitted:
+        normalized_email = email.strip().lower()
+        if not normalized_email or not password:
+            st.error("Enter your email and password to continue.")
+        elif mode == "Create account" and not name.strip():
+            st.error("Tell us your name first.")
+        elif mode == "Create account" and len(password) < 8:
+            st.error("Use at least 8 characters for your password.")
+        elif mode == "Create account":
+            if normalized_email in st.session_state.users:
+                st.error("An account with that email already exists.")
+            else:
+                create_user(st.session_state.users, normalized_email, name.strip(), password)
+                st.session_state.user = {"email": normalized_email, "name": name.strip()}
+                st.rerun()
+        else:
+            authenticated_user = authenticate_user(
+                st.session_state.users, normalized_email, password
+            )
+            if authenticated_user is None:
+                st.error("That email and password combination was not found.")
+            else:
+                st.session_state.user = authenticated_user
+                st.rerun()
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+
+if st.session_state.user is None:
+    render_auth()
+    st.stop()
+
+
+user = st.session_state.user
 with st.sidebar:
-    st.header("Connection")
+    st.markdown('<div class="brand"><span class="brand-mark" aria-hidden="true"></span> AstroWeave</div>', unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="profile"><div class="avatar">{initials(user["name"])}</div><div class="profile-name">{user["name"]}</div><div class="profile-email">{user["email"]}</div></div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown('<div class="workspace-label">Your workspace</div>', unsafe_allow_html=True)
+    st.markdown('<div class="side-meta"><div class="meta-item"><span class="meta-label">Method</span><span class="meta-value">Vedic + KP</span></div><div class="meta-item"><span class="meta-label">Readings</span><span class="meta-value">01</span></div></div>', unsafe_allow_html=True)
     api_url = st.text_input("API URL", value="http://127.0.0.1:8000")
-    st.divider()
-    st.header("Conversation")
-    username = st.text_input("Username", value="demo-user")
-    conversation_id = st.text_input("Conversation ID", value="conversation-1")
-    session_id = st.text_input("Session ID", value="session-1")
+    with st.expander("Session details"):
+        conversation_id = st.text_input("Conversation ID", value="conversation-1")
+        session_id = st.text_input("Session ID", value="session-1")
+    if st.button("Sign out", use_container_width=True):
+        st.session_state.user = None
+        st.rerun()
 
-st.subheader("Ask AstroWeave")
-with st.form("query_form"):
-    query = st.text_area(
-        "Astrology question",
-        placeholder="Ask a question for the AstroWeave backend...",
-    )
-    methodology = st.selectbox(
-        "Methodology",
-        ["Let the system decide", "Vedic", "KP", "Both"],
-    )
-    submitted = st.form_submit_button("Send to API", type="primary")
+st.markdown('<div class="eyebrow">Personal astrology workspace</div>', unsafe_allow_html=True)
+st.title("Make room for the answer.")
+st.markdown('<p class="intro">Ask one clear question. AstroWeave coordinates the right specialists and methodologies, then brings the signal back to you.</p>', unsafe_allow_html=True)
+
+st.markdown('<div class="workspace-label">New reading</div>', unsafe_allow_html=True)
+with st.container(border=True):
+    st.markdown('<div class="panel-title"><h3>What is on your mind?</h3><span class="status">● Workspace ready</span></div>', unsafe_allow_html=True)
+    with st.form("query_form"):
+        query = st.text_area(
+            "Astrology question",
+            placeholder="Ask about your career, relationships, finances, or next chapter...",
+            height=150,
+            label_visibility="collapsed",
+        )
+        first_column, second_column = st.columns([1, 1])
+        with first_column:
+            methodology = st.selectbox("Methodology", ["Let the system decide", "Vedic", "KP", "Both"])
+        with second_column:
+            submitted = st.form_submit_button("Start reading  →", use_container_width=True)
 
 if submitted:
     if not query.strip():
@@ -41,8 +184,9 @@ if submitted:
             "query": query,
             "conversation_id": conversation_id,
             "session_id": session_id,
-            "username": username,
+            "username": user["email"],
             "methodology": methodology,
+            "message_id": str(uuid4()),
         }
         try:
             response = httpx.post(f"{api_url.rstrip('/')}/run", json=payload, timeout=10)
@@ -52,10 +196,20 @@ if submitted:
             if response.status_code == 501:
                 st.info(response.json().get("detail", "Execution is not available yet."))
             elif response.is_success:
-                st.success("Request completed.")
-                st.json(response.json())
+                body = response.json()
+                st.markdown('<div class="workspace-label">Your reading</div>', unsafe_allow_html=True)
+                st.success(body.get("answer", "Request completed."))
+                with st.expander("Final state", expanded=True):
+                    st.json(body.get("state", {}))
+                with st.expander("Execution trace"):
+                    for event in body.get("execution_trace", []):
+                        step = event.get("step", "?")
+                        entry_point = event.get("entry_point", event.get("node", ""))
+                        action = event.get("action", event.get("message", ""))
+                        st.markdown(f"**STEP-{step} · ENTRY POINT: `{entry_point}`**")
+                        st.write(f"**What happened:** {action}")
+                        st.json({"context": event.get("context", {}), "runnable_config": event.get("runnable_config", {})})
             else:
                 st.error(f"API returned HTTP {response.status_code}: {response.text}")
 
-st.divider()
-st.caption("The Streamlit interface communicates with AstroWeave through HTTP; it does not execute the graph directly.")
+st.markdown('<div class="hint">Your account and workspace are local to this demo. Connect the API from the sidebar when the backend is running.</div>', unsafe_allow_html=True)
