@@ -54,7 +54,7 @@ def _manager(
         runtime.context or {},
         config,
     )
-    return {**event, "messages": []}
+    return event
 
 
 def _planner(
@@ -76,6 +76,7 @@ def _planner(
         f"Selected specialist domains: {selected}.",
         runtime.context or {},
         config,
+        {"selected_specialists": selected, "plan": selected},
     )
     return {**event, "selected_specialists": selected, "plan": selected}
 
@@ -86,7 +87,15 @@ def _dispatcher(
     context = dict(runtime.context or {})
     child_config = serializable_config(config)
     parent_trace = list(state.get("execution_trace", []))
-    cumulative_trace: list[dict[str, Any]] = parent_trace
+    entry_event = record_event(
+        state,
+        "dispatcher_entry",
+        f"Starting dispatch for {state.get('selected_specialists', ['career'])}.",
+        context,
+        config,
+        {"current_task": "invoke_specialist_subgraphs"},
+    )["execution_trace"][0]
+    cumulative_trace: list[dict[str, Any]] = [*parent_trace, entry_event]
     specialist_results: list[dict[str, Any]] = []
     tool_results: list[dict[str, Any]] = []
     stage_results: list[dict[str, Any]] = []
@@ -96,7 +105,7 @@ def _dispatcher(
         agent_config = AGENT_CONFIGS[domain]
         child_config["metadata"] = {
             **child_config.get("metadata", {}),
-            "_trace_offset": len(cumulative_trace) - len(parent_trace),
+            "_trace_offset": 0,
         }
         input_trace = list(cumulative_trace)
         child_state = build_specialist_graph(agent_config).invoke(
@@ -124,16 +133,17 @@ def _dispatcher(
         **child_config.get("metadata", {}),
         "_trace_offset": len(cumulative_trace) - len(parent_trace),
     }
-    event = record_event(
+    exit_event = record_event(
         state,
-        "dispatcher",
-        f"Invoked {len(specialist_results)} specialist subgraph(s).",
+        "dispatcher_exit",
+        f"Completed dispatch for {len(specialist_results)} specialist subgraph(s).",
         context,
         child_config,
+        {"specialist_results": specialist_results, "tool_results": tool_results, "stage_results": stage_results},
     )
     return {
-        **event,
-        "execution_trace": new_child_events + event["execution_trace"],
+        **exit_event,
+        "execution_trace": [entry_event, *new_child_events, *exit_event["execution_trace"]],
         "specialist_results": specialist_results,
         "tool_results": tool_results,
         "stage_results": stage_results,
@@ -149,6 +159,7 @@ def _collector(
         "Collected specialist answers.",
         runtime.context or {},
         config,
+        {"specialist_analysis": "\n".join(item["answer"] for item in state.get("specialist_results", []))},
     )
     answers = [item["answer"] for item in state.get("specialist_results", [])]
     return {**event, "specialist_analysis": "\n".join(answers)}
@@ -163,6 +174,7 @@ def _evaluator(
         "Marked the demo orchestration result sufficient.",
         runtime.context or {},
         config,
+        {"evaluation": "sufficient", "is_sufficient": True},
     )
     return {**event, "evaluation": "sufficient", "is_sufficient": True}
 
@@ -176,6 +188,7 @@ def _synthesizer(
         "Created the final deterministic answer.",
         runtime.context or {},
         config,
+        {"answer": f"Demo orchestration completed using: {', '.join(state.get('selected_specialists', []))}."},
     )
     domains = ", ".join(state.get("selected_specialists", []))
     return {

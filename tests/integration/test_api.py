@@ -40,6 +40,25 @@ class ApiTests(unittest.TestCase):
             [event["step"] for event in body["execution_trace"]],
             list(range(1, len(body["execution_trace"]) + 1)),
         )
+        entry_points = [event["entry_point"] for event in body["execution_trace"]]
+        self.assertLess(
+            entry_points.index("dispatcher_entry"),
+            entry_points.index("specialist_planner"),
+        )
+        self.assertLess(
+            entry_points.index("specialist_synthesizer"),
+            entry_points.index("dispatcher_exit"),
+        )
+        first_event = body["execution_trace"][0]
+        self.assertEqual(first_event["entry_point"], "graph_entry")
+        self.assertIn("user_query", first_event["state_before"])
+        self.assertEqual(first_event["state_updates"], {})
+        self.assertEqual(
+            first_event["state_before"]["messages"][0]["content"],
+            "Will I get a new job this year?",
+        )
+        self.assertEqual(first_event["state_before"], first_event["state_after"])
+        self.assertEqual(body["state"]["messages"][0]["role"], "user")
 
     def test_run_requires_query(self):
         response = self.client.post(

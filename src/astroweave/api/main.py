@@ -3,7 +3,7 @@ from uuid import uuid4
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
 
-from astroweave.common.trace import serializable_config
+from astroweave.common.trace import normalized_state, record_event, serializable_config
 from astroweave.graphs.orchestrator.orchestrator_graph import build_orchestrator_graph
 
 
@@ -50,7 +50,28 @@ def run(request: RunRequest) -> dict[str, object]:
         "messages": [
             {"message_id": message_id, "role": "user", "content": request.query}
         ],
+        "plan": [],
+        "current_task": "",
+        "tool_results": [],
+        "stage_results": [],
+        "specialist_analysis": "",
+        "evaluation": "",
+        "needs_replanning": False,
+        "iteration_count": 0,
+        "answer": "",
+        "errors": [],
+        "is_sufficient": False,
+        "selected_specialists": [],
+        "specialist_results": [],
     }
+    initial_trace = record_event(
+        initial_state,
+        "graph_entry",
+        "Accepted the request and initialized the shared state.",
+        context,
+        runnable_config,
+    )
+    initial_state["execution_trace"] = initial_trace["execution_trace"]
     state = build_orchestrator_graph().invoke(
         initial_state,
         context=context,
@@ -58,7 +79,7 @@ def run(request: RunRequest) -> dict[str, object]:
     )
     return {
         "answer": state.get("answer", ""),
-        "state": state,
+        "state": normalized_state(state),
         "context": context,
         "runnable_config": serializable_config(runnable_config),
         "execution_trace": state.get("execution_trace", []),

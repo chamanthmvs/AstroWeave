@@ -32,6 +32,7 @@ def _planner(
         "Created a deterministic demo task.",
         runtime.context or {},
         config,
+        {"plan": ["run_specialist_demo_tool"], "current_task": "run_specialist_demo_tool", "iteration_count": state.get("iteration_count", 0) + 1},
     )
     return {
         **event,
@@ -55,6 +56,7 @@ def _executor(
         f"Ran {agent_config['domain']} demo tool.",
         runtime.context or {},
         config,
+        {"tool_results": [{"tool_name": agent_config["allowed_tools"][0], "result": tool_result}], "stage_results": [{"stage": "executor", "result": tool_result}]},
     )
     return {
         **event,
@@ -74,6 +76,7 @@ def _collector(
         "Collected demo tool results.",
         runtime.context or {},
         config,
+        {"specialist_analysis": str(state.get("tool_results", []))},
     )
     return {**event, "specialist_analysis": str(state.get("tool_results", []))}
 
@@ -87,6 +90,7 @@ def _evaluator(
         "Marked the deterministic demo result sufficient.",
         runtime.context or {},
         config,
+        {"evaluation": "sufficient", "is_sufficient": True},
     )
     return {**event, "evaluation": "sufficient", "is_sufficient": True}
 
@@ -103,6 +107,7 @@ def _synthesizer(
         "Created a deterministic specialist answer.",
         runtime.context or {},
         config,
+        {"answer": f"Demo {agent_config['domain']} specialist completed analysis for: {state.get('user_query', '')}"},
     )
     return {
         **event,

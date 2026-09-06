@@ -26,6 +26,9 @@ class ExecutionEvent(TypedDict):
     node: str
     action: str
     state_keys: list[str]
+    state_before: dict[str, Any]
+    state_updates: dict[str, Any]
+    state_after: dict[str, Any]
     context: dict[str, Any]
     runnable_config: dict[str, Any]
 
