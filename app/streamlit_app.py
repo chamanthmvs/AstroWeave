@@ -213,14 +213,19 @@ if submitted:
                         st.markdown(f"**STEP-{step} · ENTRY POINT: `{entry_point}`**")
                         st.write(f"**What happened:** {action}")
                         with st.container(border=True):
-                            st.caption("State keys at entry")
-                            st.code(", ".join(event.get("state_keys", [])))
-                            st.json(
-                                {
-                                    "context": event.get("context", {}),
-                                    "runnable_config": event.get("runnable_config", {}),
-                                }
-                            )
+                            st.caption("State before this step")
+                            st.json(event.get("state_before", {}))
+                            st.caption("State updates produced by this step")
+                            st.json(event.get("state_updates", {}))
+                            st.caption("State after this step")
+                            st.json(event.get("state_after", {}))
+                            with st.expander("Context and RunnableConfig"):
+                                st.json(
+                                    {
+                                        "context": event.get("context", {}),
+                                        "runnable_config": event.get("runnable_config", {}),
+                                    }
+                                )
             else:
                 st.error(f"API returned HTTP {response.status_code}: {response.text}")
 

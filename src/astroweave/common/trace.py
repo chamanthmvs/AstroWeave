@@ -10,6 +10,24 @@ from astroweave.common.state import ExecutionEvent, State
 
 logger = logging.getLogger("astroweave.execution")
 
+STATE_DEFAULTS: dict[str, Any] = {
+    "user_query": "",
+    "messages": [],
+    "plan": [],
+    "current_task": "",
+    "tool_results": [],
+    "stage_results": [],
+    "specialist_analysis": "",
+    "evaluation": "",
+    "needs_replanning": False,
+    "iteration_count": 0,
+    "answer": "",
+    "errors": [],
+    "is_sufficient": False,
+    "selected_specialists": [],
+    "specialist_results": [],
+}
+
 
 def serializable_config(config: Mapping[str, Any]) -> dict[str, Any]:
     """Keep only JSON-friendly runtime config values for the demo trace."""
@@ -46,7 +64,11 @@ def record_event(
     message: str,
     context: Mapping[str, Any],
     config: Mapping[str, Any],
+    state_updates: Mapping[str, Any] | None = None,
 ) -> dict[str, list[ExecutionEvent]]:
+    state_updates = dict(state_updates or {})
+    state_before = normalized_state(state)
+    state_after = apply_state_updates(state_before, state_updates)
     metadata = config.get("metadata", {})
     trace_offset = metadata.get("_trace_offset", 0) if isinstance(metadata, Mapping) else 0
     step = trace_offset + len(state.get("execution_trace", [])) + 1
@@ -55,7 +77,10 @@ def record_event(
         "entry_point": node,
         "node": node,
         "action": message,
-        "state_keys": sorted(state.keys()),
+        "state_keys": sorted(state_before.keys()),
+        "state_before": state_before,
+        "state_updates": state_updates,
+        "state_after": state_after,
         "context": dict(context),
         "runnable_config": serializable_config(config),
     }
@@ -71,6 +96,31 @@ def record_event(
         f"| STATE KEYS: {event['state_keys']}"
     )
     return {"execution_trace": [event]}
+
+
+def normalized_state(state: Mapping[str, Any]) -> dict[str, Any]:
+    """Show one stable state shape instead of raw LangGraph channel growth."""
+
+    return {
+        **STATE_DEFAULTS,
+        **{key: value for key, value in state.items() if key != "execution_trace"},
+    }
+
+
+def apply_state_updates(
+    state: Mapping[str, Any], updates: Mapping[str, Any]
+) -> dict[str, Any]:
+    """Approximate the visible post-node state using the project's reducers."""
+
+    result = {**state}
+    for key, value in updates.items():
+        if key in {"messages", "tool_results", "errors", "specialist_results"}:
+            result[key] = [*result.get(key, []), *value]
+        elif key == "stage_results":
+            result[key] = [*result.get(key, []), *value][-5:]
+        else:
+            result[key] = value
+    return result
 
 
 def renumber_events(events: list[ExecutionEvent]) -> list[ExecutionEvent]:
