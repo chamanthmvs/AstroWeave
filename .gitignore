@@ -24,3 +24,6 @@ htmlcov/
 .DS_Store
 .vscode/
 .idea/
+
+# Local account records contain password hashes and should not be committed.
+app/data/users.json
