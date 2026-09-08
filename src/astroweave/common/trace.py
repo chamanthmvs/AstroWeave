@@ -33,22 +33,26 @@ def serializable_config(config: Mapping[str, Any]) -> dict[str, Any]:
     """Keep only JSON-friendly runtime config values for the demo trace."""
 
     result: dict[str, Any] = {}
-    for key in ("configurable", "metadata", "tags", "recursion_limit"):
-        if key not in config:
-            continue
-        value = config[key]
-        if key == "configurable" and isinstance(value, Mapping):
-            value = {
-                item_key: item_value
-                for item_key, item_value in value.items()
-                if not item_key.startswith("__")
-            }
-        if key == "metadata" and isinstance(value, Mapping):
-            value = {
-                item_key: item_value
-                for item_key, item_value in value.items()
-                if not item_key.startswith("_")
-            }
+    configurable = config.get("configurable", {})
+    if isinstance(configurable, Mapping) and "thread_id" in configurable:
+        result["configurable"] = {"thread_id": configurable["thread_id"]}
+
+    metadata = config.get("metadata", {})
+    if isinstance(metadata, Mapping):
+        result["metadata"] = {
+            key: metadata[key]
+            for key in ("session_id", "methodology")
+            if key in metadata
+        }
+
+    tags = config.get("tags", [])
+    if isinstance(tags, list):
+        result["tags"] = list(dict.fromkeys(tags))
+
+    if "recursion_limit" in config:
+        result["recursion_limit"] = config["recursion_limit"]
+
+    for key, value in list(result.items()):
         try:
             json.dumps(value)
         except TypeError:

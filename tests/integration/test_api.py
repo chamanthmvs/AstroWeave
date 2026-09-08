@@ -35,6 +35,11 @@ class ApiTests(unittest.TestCase):
             body["runnable_config"]["configurable"]["thread_id"],
             "conversation-1",
         )
+        self.assertEqual(
+            body["runnable_config"]["metadata"],
+            {"session_id": "session-1", "methodology": "Let the system decide"},
+        )
+        self.assertEqual(body["runnable_config"]["tags"], ["demo", "no-llm"])
         self.assertGreaterEqual(len(body["execution_trace"]), 10)
         self.assertEqual(
             [event["step"] for event in body["execution_trace"]],
@@ -59,6 +64,12 @@ class ApiTests(unittest.TestCase):
         )
         self.assertEqual(first_event["state_before"], first_event["state_after"])
         self.assertEqual(body["state"]["messages"][0]["role"], "user")
+        self.assertTrue(
+            all(
+                set(event["runnable_config"]) <= {"configurable", "metadata", "tags", "recursion_limit"}
+                for event in body["execution_trace"]
+            )
+        )
 
     def test_run_requires_query(self):
         response = self.client.post(
