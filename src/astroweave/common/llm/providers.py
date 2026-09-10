@@ -50,5 +50,19 @@ def _build_anthropic(config: LLMConfig) -> Any:
     return ChatAnthropic(model=config.model, temperature=config.temperature)
 
 
+def _build_groq(config: LLMConfig) -> Any:
+    import os
+
+    from langchain_openai import ChatOpenAI
+
+    return ChatOpenAI(
+        model=config.model,
+        temperature=config.temperature,
+        base_url="https://api.groq.com/openai/v1",
+        api_key=os.environ.get("GROQ_API_KEY"),
+    )
+
+
 register_provider("openai", _build_openai)
 register_provider("anthropic", _build_anthropic)
+register_provider("groq", _build_groq)
