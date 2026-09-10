@@ -170,6 +170,13 @@ with st.sidebar:
     with st.expander("Session details"):
         conversation_id = st.text_input("Conversation ID", value="conversation-1")
         session_id = st.text_input("Session ID", value="session-1")
+    with st.expander("Birth details", expanded=True):
+        birth_date = st.date_input("Birth date")
+        birth_time = st.time_input("Birth time")
+        place_name = st.text_input("Birth place", placeholder="e.g. Chennai, India")
+        birth_latitude = st.number_input("Latitude", min_value=-90.0, max_value=90.0, value=0.0, format="%.4f")
+        birth_longitude = st.number_input("Longitude", min_value=-180.0, max_value=180.0, value=0.0, format="%.4f")
+        utc_offset_hours = st.number_input("UTC offset (hours)", min_value=-12.0, max_value=14.0, value=5.5, step=0.5)
     if st.button("Sign out", use_container_width=True):
         st.session_state.user = None
         st.rerun()
@@ -197,6 +204,8 @@ with st.container(border=True):
 if submitted:
     if not query.strip():
         st.warning("Enter an astrology question first.")
+    elif not place_name.strip():
+        st.warning("Enter your birth place so a chart can be computed.")
     else:
         payload = {
             "query": query,
@@ -205,6 +214,14 @@ if submitted:
             "username": user["email"],
             "methodology": methodology,
             "message_id": str(uuid4()),
+            "birth_details": {
+                "date": birth_date.isoformat(),
+                "time": birth_time.strftime("%H:%M:%S"),
+                "latitude": birth_latitude,
+                "longitude": birth_longitude,
+                "utc_offset_hours": utc_offset_hours,
+                "place_name": place_name.strip(),
+            },
         }
         logger.info(
             "Submitting reading request username=%s conversation_id=%s session_id=%s methodology=%s",
@@ -214,28 +231,19 @@ if submitted:
             methodology,
         )
         try:
-            response = httpx.post(f"{api_url.rstrip('/')}/run", json=payload, timeout=10)
+            with st.spinner("Consulting the specialists..."):
+                response = httpx.post(f"{api_url.rstrip('/')}/run", json=payload, timeout=120)
         except httpx.RequestError as error:
             logger.exception("Could not connect to the API at %s", api_url)
             st.error(f"Could not connect to the API: {error}")
         else:
             logger.info("API responded with status %s", response.status_code)
-            if response.status_code == 501:
-                st.info(response.json().get("detail", "Execution is not available yet."))
-            elif response.is_success:
+            if response.is_success:
                 body = response.json()
                 st.markdown('<div class="workspace-label">Your reading</div>', unsafe_allow_html=True)
                 st.success(body.get("answer", "Request completed."))
-                with st.expander("Final state", expanded=True):
+                with st.expander("Final state"):
                     st.json(body.get("state", {}))
-                with st.expander("Execution trace"):
-                    for event in body.get("execution_trace", []):
-                        step = event.get("step", "?")
-                        entry_point = event.get("entry_point", event.get("node", ""))
-                        action = event.get("action", event.get("message", ""))
-                        st.markdown(f"**STEP-{step} · ENTRY POINT: `{entry_point}`**")
-                        st.write(f"**What happened:** {action}")
-                        st.json({"context": event.get("context", {}), "runnable_config": event.get("runnable_config", {})})
             else:
                 logger.error("API returned HTTP %s: %s", response.status_code, response.text)
                 st.error(f"API returned HTTP {response.status_code}: {response.text}")

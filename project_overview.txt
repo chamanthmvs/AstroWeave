@@ -1,6 +1,6 @@
 ASTROWEAVE - PROJECT OVERVIEW
 ==============================
-Last updated: 2026-09-10
+Last updated: 2026-09-10 (v1 wiring, verified end-to-end)
 
 Purpose of this file
 ---------------------
@@ -24,61 +24,109 @@ High-level flow:
        -> Final answer
 
 There are two apps in this repo:
-  1. A FastAPI backend (src/astroweave) that will eventually run the
-     LangGraph orchestration and expose it over HTTP.
-  2. A Streamlit frontend (app/) that provides a simple sign-in/sign-up UI
-     and a form to submit a question to the backend.
+  1. A FastAPI backend (src/astroweave) that runs the LangGraph orchestration
+     end-to-end and exposes it over HTTP.
+  2. A Streamlit frontend (app/) that provides a sign-in/sign-up UI and a
+     form (question + birth details) to submit to the backend.
 
-Current state (skeleton / early phase)
-----------------------------------------
-The project is intentionally still in a "structure first" phase. Most nodes
-are pass-through placeholders; the real astrology reasoning is not wired up
-yet. Concretely, as of this writing:
+Current state (v1: end-to-end wired, no knowledge/RAG layer yet)
+-------------------------------------------------------------------
+The orchestrator and specialist graphs now run real logic end-to-end - a
+question submitted from the Streamlit UI reaches an LLM-synthesized answer.
+This has been verified with a real run (real Groq LLM, real chart_service,
+no mocks): the planner correctly chose specialists + methodology, each
+specialist produced real Vedic reasoning grounded in the fetched chart, and
+the synthesizer wove them into one coherent answer. What is NOT yet in place
+is a knowledge/retrieval layer (RAG) for grounding specialists in astrology
+reference material - that is intentionally deferred until a knowledge
+source/dataset is chosen. Concretely, as of this writing:
 
 - src/astroweave/api/main.py
-    FastAPI app with a /health endpoint and a /run endpoint. /run validates
-    the request shape (query, conversation_id, session_id, username,
-    methodology) but always returns HTTP 501, since actual execution isn't
-    implemented yet.
+    FastAPI app with /health and /run. /run accepts query, conversation_id,
+    session_id, username, methodology, and optional birth_details (date,
+    time, latitude, longitude, utc_offset_hours, place_name), builds the
+    LangGraph Context, invokes the compiled orchestrator graph, and returns
+    {answer, state, execution_trace}. Orchestrator failures (bad chart data,
+    missing LLM provider/key, etc.) are caught and surfaced as HTTP 502
+    instead of a raw 500.
 
 - src/astroweave/graphs/orchestrator/orchestrator_graph.py
-    Builds the top-level LangGraph workflow: manager -> planner ->
-    dispatcher -> collector -> evaluator -> synthesizer. Every node is a
-    logging pass-through for now; the evaluator conditionally routes back
-    to planner or forward to synthesizer based on state["is_sufficient"].
+    manager -> planner -> dispatcher -> collector -> evaluator -> synthesizer.
+      * manager: validates the query isn't empty, short-circuits with an
+        error otherwise.
+      * planner: calls the "orchestrator" LLM with ORCHESTRATOR_ROUTING_PROMPT
+        to choose specialists + methodology (or use the UI's forced
+        methodology if one was picked instead of "Let the system decide").
+      * dispatcher: delegates to astroweave.orchestration.dispatcher.
+      * evaluator: sufficient once specialist_results are present or after
+        2 iterations (re-planning loop is bounded, not infinite).
+      * synthesizer: calls the LLM again with ORCHESTRATOR_SYNTHESIS_PROMPT
+        to weave every specialist's conclusion into one coherent answer
+        (falls back to the collected errors if no specialist produced a
+        result).
+
+- src/astroweave/orchestration/manager/manager.py
+    run_manager() - validates the query, initializes iteration_count.
+
+- src/astroweave/orchestration/dispatcher/dispatcher.py
+    run_dispatcher() - reads birth_details from the run's Context, fetches
+    one birth chart via common.tools.chart_client.get_birth_chart(), then
+    invokes the specialist subgraph once per planned specialist, merging
+    each specialist's specialist_results (and errors) back into the
+    top-level state. Missing birth details, chart_service failures, or a
+    single specialist erroring are all captured as state["errors"] instead
+    of crashing the run (one bad specialist doesn't sink the others).
+    The chart is fetched with a reduced scope (varga_factors=[9, 10],
+    ashtakavarga excluded) and dasha_bhukti is trimmed to the years around
+    today (_trim_dasha_bhukti) - the full chart payload is ~9K tokens on its
+    own, enough to blow through small-provider rate limits (e.g. Groq free
+    tier's 8000 TPM) before a specialist even responds.
 
 - src/astroweave/graphs/specialist/specialist_graph.py
-    Same idea, but for the subgraph shared by every specialist agent:
-    planner -> executor -> collector -> evaluator -> synthesizer.
+    planner -> executor -> collector -> evaluator -> synthesizer, shared by
+    every specialist. executor looks up the specialist's prompt from
+    astroweave.agents.specialists.SPECIALIST_PROMPTS by state["current_task"],
+    calls that specialist's LLM (astroweave.common.llm.get_llm("specialist",
+    agent_name=<name>)) with the question + methodology + chart data (JSON),
+    and records {specialist, analysis, conclusion, confidence} into
+    state["specialist_results"]. v1 runs a single planner/executor pass per
+    specialist - the evaluator always reports "sufficient" (no tool-retry
+    loop yet).
+
+- src/astroweave/agents/specialists/__init__.py
+    SPECIALIST_PROMPTS registry mapping "career"/"finance"/"love"/"sports" to
+    their prompt constants - this is the single place a new specialist needs
+    to be registered.
+
+- src/astroweave/methodologies/__init__.py
+    normalize_methodology() maps the UI's methodology label ("Let the system
+    decide"/"Vedic"/"KP"/"Both") to "vedic"/"kp"/"both"/None. No
+    methodology-specific retrieval yet - methodology is currently just a
+    label passed into each specialist's prompt alongside the full chart JSON.
 
 - src/astroweave/common/state/state.py
-    Shared LangGraph State TypedDict: messages, plan, tool results, stage
-    results (capped at the latest 5), evaluation flags, iteration count,
-    errors, final answer, etc.
+    Shared LangGraph State TypedDict, now also carrying specialists,
+    methodology, chart_data, and specialist_results (in addition to the
+    original messages/plan/tool_results/stage_results/errors/etc.).
 
 - src/astroweave/common/context/context.py
-    Shared Context TypedDict: conversation_id, session_id, username.
+    Shared Context TypedDict: conversation_id, session_id, username, and now
+    birth_details (dict) - passed once per run, immutable during the run.
 
-- src/astroweave/common/config/
-    Logging configuration lives here (logging.py). configure_logging() /
-    get_logger() set up a process-wide logging.basicConfig() the first time
-    they're called, controlled by the ASTROWEAVE_LOG_LEVEL env var
-    (defaults to INFO).
-
-- Not yet implemented (empty placeholder packages):
-    agents/specialists/{career,finance,love,sports}
-    methodologies/{kp,vedic}
-    orchestration/{dispatcher,manager}
-    common/tools
-    common/knowledge/retrieval
+- Still empty / not yet implemented:
+    common/knowledge/retrieval (the RAG/knowledge layer - deferred)
     common/communication
+    methodologies/kp, methodologies/vedic (no methodology-specific code yet
+      beyond the label normalization above)
 
 - app/streamlit_app.py
-    Sign in / create account UI (backed by app/auth.py), a query form with
-    a methodology selector, and a call to POST /run on the backend. Still
-    shows a raw "Final state" / "Execution trace" debug panel for
-    development - this is expected to be removed once the app is opened up
-    to a general audience, now that backend logging covers that need.
+    Sign in / create account UI (backed by app/auth.py), a query form with a
+    methodology selector, and a "Birth details" sidebar section (date, time,
+    place, latitude, longitude, UTC offset) that's sent with every /run
+    request. Shows a spinner while the backend runs (LLM calls can take a
+    while) and a "Final state" debug panel with the raw state for
+    development - still expected to be removed once the app is opened up to
+    a general audience.
 
 - app/auth.py
     Local JSON-file user store (app/data/users.json) with scrypt password
@@ -87,8 +135,8 @@ yet. Concretely, as of this writing:
 
 Logging
 -------
-Backend and frontend now use Python's standard `logging` module instead of
-print statements or debug UI panels:
+Backend and frontend use Python's standard `logging` module instead of print
+statements or debug UI panels:
   - Backend modules get a logger via
     `astroweave.common.config.get_logger(__name__)`, which configures the
     root logger on first use (format: timestamp, level, logger name,
@@ -96,21 +144,50 @@ print statements or debug UI panels:
   - The Streamlit app configures logging.basicConfig() directly at import
     time and logs request submissions, API responses, and connection
     errors.
-  - Graph nodes log at DEBUG when they execute (useful once real logic
-    replaces the pass-throughs); the API logs at INFO/WARNING for request
-    handling.
+  - Every LLM JSON response is parsed via astroweave.common.llm.parse_json_response(),
+    which logs the "reasoning"/"analysis" field at INFO so every routing
+    decision and specialist conclusion is auditable from the logs alone.
 
 Tests
 -----
-tests/unit - auth logic, orchestrator graph routing, specialist graph
-routing and the "keep latest five stage results" reducer.
-tests/integration - /health and /run behavior against the FastAPI app.
-Run with: PYTHONPATH=src pytest tests/
+tests/unit - auth logic, orchestrator graph routing (LLM + dispatcher
+mocked), specialist graph executor/routing (LLM mocked), dispatcher fan-out
+(chart_client + specialist graph mocked, incl. specialist-level errors
+surfacing into state["errors"]), and the "keep latest five stage results"
+reducer.
+tests/integration - /health and /run (orchestrator graph mocked) against the
+FastAPI app.
+Run with: PYTHONPATH=src pytest tests/ (17 tests, all mocked/offline - no
+real LLM or chart_service calls needed).
+
+Environment configuration (.env files)
+----------------------------------------
+src/astroweave/common/llm/config.py loads a dotenv file on import, picked by
+the ASTROWEAVE_ENV env var (defaults to "development"):
+  ASTROWEAVE_ENV=development -> .env.development (default)
+  ASTROWEAVE_ENV=production  -> .env.production
+Both files are git-ignored (along with any other .env*) - copy one manually
+per machine/deployment with your own API keys. Nothing named .env.example is
+committed; ask a teammate for the variable names or check config.py/
+providers.py for what's read (ASTROWEAVE_LLM_PROVIDER/_MODEL/_TEMPERATURE,
+OPENAI_API_KEY/ANTHROPIC_API_KEY/GROQ_API_KEY, ASTROWEAVE_CHART_SERVICE_URL,
+ASTROWEAVE_LOG_LEVEL).
 
 How to run locally
 -------------------
 Backend:  PYTHONPATH=src uvicorn astroweave.api.main:app --reload
 Frontend: streamlit run app/streamlit_app.py
+Chart service (required for /run to work; needs its own venv - see below):
+  uvicorn chart_service.main:app --port 8100
+
+You'll also need an LLM provider installed and configured, e.g.:
+  pip install langchain-openai
+  export OPENAI_API_KEY=...
+(or langchain-anthropic + ASTROWEAVE_LLM_PROVIDER=anthropic, or Groq via
+langchain-openai pointed at Groq's OpenAI-compatible endpoint +
+ASTROWEAVE_LLM_PROVIDER=groq + GROQ_API_KEY - see providers.py's _build_groq.
+See src/astroweave/common/llm/config.py for all the env var overrides
+available per role/agent.)
 
 Chart calculation service (chart_service/)
 --------------------------------------------
@@ -122,8 +199,10 @@ network service must release its combined source under AGPL too.
 
 To avoid pulling that obligation onto the whole AstroWeave backend, PyJHora is
 isolated in its own standalone service, chart_service/ (own requirements.txt,
-own FastAPI app, no shared code with src/astroweave). It only communicates
-with the rest of the system over plain HTTP:
+own FastAPI app, no shared code with src/astroweave). Give it its own venv
+(e.g. chart_service/.venv) rather than installing PyJHora into the main
+backend's environment - keeps the AGPL isolation real, not just structural.
+It only communicates with the rest of the system over plain HTTP:
 
   POST /chart  { date, time, latitude, longitude, utc_offset_hours, place_name,
                  varga_factors?, include_dasha_bhukti?, include_bhava_chart?,
@@ -146,10 +225,13 @@ used here.
 
 What's next (not a commitment, just current direction)
 ---------------------------------------------------------
-- Implement real logic in orchestration/manager and orchestration/dispatcher,
-  including calling chart_client.get_birth_chart() once a specialist needs it.
-- Implement the first domain specialist end-to-end (likely career or love).
-- Wire up a methodology (Vedic or KP) using chart_service's output.
-- Add retrieval/knowledge sources under common/knowledge.
-- Remove the frontend debug panels (Final state / Execution trace) once the
-  backend is doing real work and logging is trusted as the source of truth.
+- Add the knowledge/retrieval (RAG) layer under common/knowledge once a
+  reference data source is chosen, and let specialists cite retrieved
+  passages rather than relying on the LLM's own astrology knowledge.
+- Add real methodology-specific logic (methodologies/vedic, methodologies/kp)
+  beyond label normalization, e.g. shaping which chart sections are handed
+  to a specialist per methodology.
+- Let specialists request a second person's chart for compatibility-style
+  love questions.
+- Remove the frontend "Final state" debug panel once the backend is doing
+  RAG-grounded work and logging is trusted as the source of truth.

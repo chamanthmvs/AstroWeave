@@ -3,8 +3,17 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-_DEFAULT_PROVIDER = "openai"
-_DEFAULT_MODEL = "gpt-4o-mini"
+from dotenv import load_dotenv
+
+# ASTROWEAVE_ENV picks the dotenv file: .env.development (default), .env.production,
+# .env.test, etc. Falls back to a plain .env if the environment-specific file
+# doesn't exist, so a single shared .env still works for simple local setups.
+_env_name = os.environ.get("ASTROWEAVE_ENV", "development")
+if not load_dotenv(f".env.{_env_name}"):
+    load_dotenv()
+
+_DEFAULT_PROVIDER = "groq"
+_DEFAULT_MODEL = "openai/gpt-oss-20b"
 _DEFAULT_TEMPERATURE = 0.2
 
 
