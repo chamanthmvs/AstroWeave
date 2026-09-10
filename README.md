@@ -64,7 +64,7 @@ uses a birth chart, and a synthesizer produces one answer. The knowledge/RAG
 layer and methodology-specific Vedic/KP logic are not implemented yet.
 
 The fuller implementation snapshot and roadmap are published in the
-[GitHub Pages documentation](docs/index.html).
+[here](https://chamanthmvs.github.io/AstroWeave/).
 
 ## Local Development
 
