@@ -6,7 +6,7 @@ from langgraph.runtime import Runtime
 
 from astroweave.common.config import get_logger
 from astroweave.common.context import Context
-from astroweave.common.llm import get_llm, parse_json_response
+from astroweave.common.llm import ContextLimitExceededError, enforce_context_limit, get_llm, parse_json_response
 from astroweave.common.state import State
 from astroweave.methodologies import normalize_methodology
 from astroweave.orchestration.dispatcher.dispatcher import run_dispatcher
@@ -93,16 +93,24 @@ def _synthesizer(state: State) -> State:
         f"{result.get('conclusion', '')} -- {result.get('analysis', '')}"
         for result in specialist_results
     ]
+    user_content = (
+        f"User question: {state.get('user_query', '')}\n\n"
+        "Specialist findings:\n" + "\n".join(summary_lines)
+    )
+    try:
+        enforce_context_limit("synthesizer", user_content)
+    except ContextLimitExceededError as error:
+        logger.warning("synthesizer falling back to raw conclusions: %s", error)
+        fallback = " ".join(
+            f"{result['specialist']}: {result.get('conclusion', '')}" for result in specialist_results
+        )
+        return {"answer": fallback, "errors": errors + [str(error)]}
+
     llm = get_llm("orchestrator")
     response = llm.invoke(
         [
             SystemMessage(content=ORCHESTRATOR_SYNTHESIS_PROMPT),
-            HumanMessage(
-                content=(
-                    f"User question: {state.get('user_query', '')}\n\n"
-                    "Specialist findings:\n" + "\n".join(summary_lines)
-                )
-            ),
+            HumanMessage(content=user_content),
         ]
     )
     return {"answer": response.content}

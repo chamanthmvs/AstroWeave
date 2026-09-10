@@ -1,6 +1,6 @@
 # AstroWeave
 
-> A hierarchical multi-agent astrology system built with LangGraph.
+> An in-progress hierarchical multi-agent astrology system built with LangGraph.
 
 AstroWeave is an AI-powered astrology system where a central **Astrologer Manager** coordinates specialized astrologer agents to analyze user questions, select relevant methodologies, evaluate results, and produce a coherent final response.
 
@@ -54,13 +54,38 @@ For a question such as *“Will I get a new job this year?”*, AstroWeave can i
 - Retrieval and knowledge bases
 - Tool-based agent execution
 
-## Status
+## Current Status
 
-**Under active development**
+**This project is still in progress and is not production-ready.**
 
-v1 is wired end-to-end: a question from the Streamlit UI reaches the FastAPI
-backend, is routed to domain specialists by an LLM-driven planner, grounded
-in a real birth chart, and synthesized into one final answer. Not yet in
-place: a knowledge/retrieval (RAG) layer for grounding specialists in
-astrology reference material, and methodology-specific (Vedic/KP) retrieval
-logic beyond label selection. See project_overview.txt for the full picture.
+The v1 flow is wired end-to-end: a Streamlit question reaches the FastAPI
+backend, an LLM-driven planner routes it to domain specialists, the analysis
+uses a birth chart, and a synthesizer produces one answer. The knowledge/RAG
+layer and methodology-specific Vedic/KP logic are not implemented yet.
+
+The fuller implementation snapshot and roadmap are published in the
+[GitHub Pages documentation](docs/index.html).
+
+## Local Development
+
+Install the root dependencies, configure an LLM provider with environment
+variables, then run the backend and UI in separate terminals:
+
+```bash
+pip install -r requirements.txt
+export ASTROWEAVE_LLM_PROVIDER=groq
+export GROQ_API_KEY=your_key_here
+PYTHONPATH=src uvicorn astroweave.api.main:app --reload
+streamlit run app/streamlit_app.py
+```
+
+The `/run` endpoint also requires the chart service:
+
+```bash
+cd chart_service
+pip install -r requirements.txt
+uvicorn main:app --port 8100
+```
+
+Never commit `.env` files, API keys, or local user databases. Use your
+hosting provider's secret manager for deployments.
