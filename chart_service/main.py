@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timedelta, timezone
 
 from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel, Field
 
 from jhora import const, utils
-from jhora.horoscope.chart import ashtakavarga, charts
+from jhora.horoscope.chart import ashtakavarga, charts, strength, yoga
 from jhora.horoscope.dhasa.graha import vimsottari
 from jhora.panchanga import drik
 
@@ -32,9 +33,13 @@ KP_LORD_FIELDS = [
     "nakshatra_lord", "sub_lord", "pratyantar_lord", "sookshma_lord", "praana_lord", "deha_lord",
 ]
 # Default divisional (varga) charts requested alongside D1, keyed by their varga factor.
-DEFAULT_VARGA_FACTORS = {"D9": 9, "D10": 10, "D7": 7, "D12": 12, "D3": 3, "D24": 24}
+# D2 (wealth) and D60 (overall accuracy, per Parashara the most important varga) are
+# included by default alongside the original career/marriage/family-oriented set.
+DEFAULT_VARGA_FACTORS = {"D2": 2, "D9": 9, "D10": 10, "D7": 7, "D12": 12, "D3": 3, "D24": 24, "D60": 60}
 # Ashtakavarga only covers the seven classical grahas plus the ascendant (no Rahu/Ketu).
 ASHTAKAVARGA_ROW_LABELS = PLANET_NAMES[:7] + ["Ascendant"]
+# Shadbala/dasha-depth calculations only cover the seven classical grahas (no Rahu/Ketu).
+CLASSICAL_PLANET_NAMES = PLANET_NAMES[:7]
 
 
 def _planet_label(planet_id: int | str) -> str:
@@ -55,6 +60,10 @@ class ChartRequest(BaseModel):
     include_dasha_bhukti: bool = Field(default=True)
     include_bhava_chart: bool = Field(default=True)
     include_ashtakavarga: bool = Field(default=True)
+    include_shadbala: bool = Field(default=True)
+    include_yogas: bool = Field(default=True)
+    include_transits: bool = Field(default=True)
+    include_current_dasha: bool = Field(default=True)
 
 
 @app.get("/health")
@@ -126,6 +135,56 @@ def _ashtakavarga_table(positions: list) -> dict[str, object]:
     }
 
 
+def _shadbala_table(julian_day: float, place: drik.Place) -> dict[str, dict[str, float]]:
+    """Planetary strength (Shadbala), in rupas and as a ratio to the classical minimum.
+
+    A `strength_ratio` >= 1.0 means the planet meets or exceeds the strength
+    classical texts consider required to give good results.
+    """
+    *_components, sb_rupa, sb_strength = strength.shad_bala(julian_day, place)
+    return {
+        name: {"strength_rupas": sb_rupa[index], "strength_ratio": sb_strength[index]}
+        for index, name in enumerate(CLASSICAL_PLANET_NAMES)
+    }
+
+
+def _yoga_list(julian_day: float, place: drik.Place) -> list[dict[str, str]]:
+    """Classical yogas (planetary combinations) present in the D1 chart."""
+    yoga_results, _found, _total = yoga.get_yoga_details(julian_day, place, divisional_chart_factor=1)
+    return [
+        {"name": details[1], "description": details[2], "benefits": details[3]}
+        for details in yoga_results.values()
+    ]
+
+
+def _now_julian_day(place: drik.Place) -> tuple[float, datetime]:
+    now_local = datetime.now(timezone.utc) + timedelta(hours=place.timezone)
+    julian_day = drik.utils.julian_day_number(
+        (now_local.year, now_local.month, now_local.day),
+        (now_local.hour, now_local.minute, now_local.second),
+    )
+    return julian_day, now_local
+
+
+def _transit_positions(place: drik.Place, jd_now: float, now_local: datetime) -> dict[str, object]:
+    """Where the planets are right now, in the birth place's sky - for gochara analysis."""
+    formatted = _format_planet_positions(charts.rasi_chart(jd_now, place))
+    formatted["as_of"] = now_local.strftime("%Y-%m-%d %H:%M:%S")
+    return formatted
+
+
+def _current_dasha(julian_day: float, place: drik.Place, jd_now: float, now_local: datetime) -> dict[str, object]:
+    """The Mahadasha/Antardasha/Pratyantardasha lords active right now, for timing questions."""
+    running = vimsottari.get_running_dhasa_for_given_date(
+        jd_now, julian_day, place, dhasa_level_index=const.MAHA_DHASA_DEPTH.PRATYANTARA
+    )
+    level_keys = ["maha_lord", "antardasha_lord", "pratyantardasha_lord"]
+    result: dict[str, object] = {"as_of": now_local.strftime("%Y-%m-%d %H:%M:%S")}
+    for level_key, (lords, _start, _end) in zip(level_keys, running):
+        result[level_key] = _planet_label(lords[-1])
+    return result
+
+
 @app.post("/chart")
 def compute_chart(request: ChartRequest) -> dict[str, object]:
     logger.info(
@@ -171,6 +230,16 @@ def compute_chart(request: ChartRequest) -> dict[str, object]:
         result["bhava_chart"] = _bhava_chart_table(julian_day, place)
     if request.include_ashtakavarga:
         result["ashtakavarga"] = _ashtakavarga_table(d1_positions)
+    if request.include_shadbala:
+        result["shadbala"] = _shadbala_table(julian_day, place)
+    if request.include_yogas:
+        result["yogas"] = _yoga_list(julian_day, place)
+    if request.include_transits or request.include_current_dasha:
+        jd_now, now_local = _now_julian_day(place)
+        if request.include_transits:
+            result["transits"] = _transit_positions(place, jd_now, now_local)
+        if request.include_current_dasha:
+            result["current_dasha"] = _current_dasha(julian_day, place, jd_now, now_local)
 
     logger.info("Chart computed successfully date=%s time=%s", request.date, request.time)
     return result

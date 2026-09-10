@@ -13,7 +13,7 @@ if not load_dotenv(f".env.{_env_name}"):
     load_dotenv()
 
 _DEFAULT_PROVIDER = "groq"
-_DEFAULT_MODEL = "openai/gpt-oss-20b"
+_DEFAULT_MODEL = "openai/gpt-oss-120b"
 _DEFAULT_TEMPERATURE = 0.2
 
 

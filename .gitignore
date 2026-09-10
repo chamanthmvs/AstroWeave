@@ -28,3 +28,7 @@ htmlcov/
 
 # Local account records contain password hashes and should not be committed.
 app/data/users.json
+app/data/astroweave.db
+
+# Agent-oriented project context notes (not for the repo history).
+PROJECT_CONTEXT.md
