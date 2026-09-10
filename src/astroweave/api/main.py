@@ -1,6 +1,9 @@
 from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel, Field
 
+from astroweave.common.config import get_logger
+
+logger = get_logger(__name__)
 
 app = FastAPI(
     title="AstroWeave API",
@@ -19,6 +22,7 @@ class RunRequest(BaseModel):
 
 @app.get("/health")
 def health() -> dict[str, str]:
+    logger.debug("Health check requested")
     return {"status": "ok", "service": "astroweave-api"}
 
 
@@ -26,6 +30,15 @@ def health() -> dict[str, str]:
 def run(request: RunRequest) -> None:
     """Reserve the execution endpoint for the next dummy-flow branch."""
 
+    logger.info(
+        "Run requested conversation_id=%s session_id=%s username=%s methodology=%s query_length=%d",
+        request.conversation_id,
+        request.session_id,
+        request.username,
+        request.methodology,
+        len(request.query),
+    )
+    logger.warning("Run endpoint is not implemented yet; returning 501")
     raise HTTPException(
         status_code=status.HTTP_501_NOT_IMPLEMENTED,
         detail="AstroWeave execution is not implemented in this branch.",

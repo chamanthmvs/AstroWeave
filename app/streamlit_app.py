@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+import logging
 from uuid import uuid4
 
 import httpx
 import streamlit as st
 
 from auth import authenticate_user, create_user, load_users
+
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s")
+logger = logging.getLogger(__name__)
 
 
 st.set_page_config(
@@ -201,11 +206,20 @@ if submitted:
             "methodology": methodology,
             "message_id": str(uuid4()),
         }
+        logger.info(
+            "Submitting reading request username=%s conversation_id=%s session_id=%s methodology=%s",
+            user["email"],
+            conversation_id,
+            session_id,
+            methodology,
+        )
         try:
             response = httpx.post(f"{api_url.rstrip('/')}/run", json=payload, timeout=10)
         except httpx.RequestError as error:
+            logger.exception("Could not connect to the API at %s", api_url)
             st.error(f"Could not connect to the API: {error}")
         else:
+            logger.info("API responded with status %s", response.status_code)
             if response.status_code == 501:
                 st.info(response.json().get("detail", "Execution is not available yet."))
             elif response.is_success:
@@ -223,6 +237,7 @@ if submitted:
                         st.write(f"**What happened:** {action}")
                         st.json({"context": event.get("context", {}), "runnable_config": event.get("runnable_config", {})})
             else:
+                logger.error("API returned HTTP %s: %s", response.status_code, response.text)
                 st.error(f"API returned HTTP {response.status_code}: {response.text}")
 
 st.markdown('<div class="hint">Your account and workspace are local to this demo. Connect the API from the sidebar when the backend is running.</div>', unsafe_allow_html=True)
