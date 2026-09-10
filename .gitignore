@@ -21,6 +21,7 @@ htmlcov/
 # Local tooling and environment files
 .env
 .env.*
+
 .DS_Store
 .vscode/
 .idea/

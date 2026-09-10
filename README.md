@@ -58,4 +58,9 @@ For a question such as *“Will I get a new job this year?”*, AstroWeave can i
 
 **Under active development**
 
-The initial phase focuses on project structure, agent boundaries, shared state, orchestration, specialist subgraphs, retrieval boundaries, and communication architecture.
+v1 is wired end-to-end: a question from the Streamlit UI reaches the FastAPI
+backend, is routed to domain specialists by an LLM-driven planner, grounded
+in a real birth chart, and synthesized into one final answer. Not yet in
+place: a knowledge/retrieval (RAG) layer for grounding specialists in
+astrology reference material, and methodology-specific (Vedic/KP) retrieval
+logic beyond label selection. See project_overview.txt for the full picture.

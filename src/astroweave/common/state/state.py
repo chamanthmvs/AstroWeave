@@ -28,6 +28,13 @@ def keep_latest_five(
     return (current + update)[-5:]
 
 
+class SpecialistResult(TypedDict):
+    specialist: str
+    analysis: str
+    conclusion: str
+    confidence: str
+
+
 class State(TypedDict, total=False):
     user_query: str
     messages: Annotated[list[Message], operator.add]
@@ -35,7 +42,11 @@ class State(TypedDict, total=False):
     current_task: str
     tool_results: Annotated[list[ToolResult], operator.add]
     stage_results: Annotated[list[StageResult], keep_latest_five]
+    specialists: list[str]
+    methodology: str
+    chart_data: dict[str, Any]
     specialist_analysis: str
+    specialist_results: Annotated[list[SpecialistResult], operator.add]
     evaluation: str
     needs_replanning: bool
     iteration_count: int
