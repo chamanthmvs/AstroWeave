@@ -1,0 +1,122 @@
+ASTROWEAVE - PROJECT OVERVIEW
+==============================
+Last updated: 2026-09-10
+
+Purpose of this file
+---------------------
+A plain-language snapshot of what AstroWeave is and what currently exists in
+the repo. This is NOT a commit log or changelog - it is a high-level summary
+meant to be skimmed by anyone (including future us) who wants to get back up
+to speed quickly. Update this file occasionally (e.g. after finishing a
+phase of work), not after every small change.
+
+What is AstroWeave
+-------------------
+AstroWeave is a hierarchical multi-agent astrology system built on LangGraph.
+A central "Astrologer Manager" takes a user's question, plans how to answer
+it, dispatches work to domain specialist agents (career, finance, love,
+sports, ...), applies astrology methodologies (Vedic, KP), collects and
+evaluates the results, and synthesizes one final answer.
+
+High-level flow:
+  User -> Manager -> Planner -> Dispatcher -> Specialist subgraph(s)
+       -> Collector -> Evaluator -> (re-plan if insufficient) -> Synthesizer
+       -> Final answer
+
+There are two apps in this repo:
+  1. A FastAPI backend (src/astroweave) that will eventually run the
+     LangGraph orchestration and expose it over HTTP.
+  2. A Streamlit frontend (app/) that provides a simple sign-in/sign-up UI
+     and a form to submit a question to the backend.
+
+Current state (skeleton / early phase)
+----------------------------------------
+The project is intentionally still in a "structure first" phase. Most nodes
+are pass-through placeholders; the real astrology reasoning is not wired up
+yet. Concretely, as of this writing:
+
+- src/astroweave/api/main.py
+    FastAPI app with a /health endpoint and a /run endpoint. /run validates
+    the request shape (query, conversation_id, session_id, username,
+    methodology) but always returns HTTP 501, since actual execution isn't
+    implemented yet.
+
+- src/astroweave/graphs/orchestrator/orchestrator_graph.py
+    Builds the top-level LangGraph workflow: manager -> planner ->
+    dispatcher -> collector -> evaluator -> synthesizer. Every node is a
+    logging pass-through for now; the evaluator conditionally routes back
+    to planner or forward to synthesizer based on state["is_sufficient"].
+
+- src/astroweave/graphs/specialist/specialist_graph.py
+    Same idea, but for the subgraph shared by every specialist agent:
+    planner -> executor -> collector -> evaluator -> synthesizer.
+
+- src/astroweave/common/state/state.py
+    Shared LangGraph State TypedDict: messages, plan, tool results, stage
+    results (capped at the latest 5), evaluation flags, iteration count,
+    errors, final answer, etc.
+
+- src/astroweave/common/context/context.py
+    Shared Context TypedDict: conversation_id, session_id, username.
+
+- src/astroweave/common/config/
+    Logging configuration lives here (logging.py). configure_logging() /
+    get_logger() set up a process-wide logging.basicConfig() the first time
+    they're called, controlled by the ASTROWEAVE_LOG_LEVEL env var
+    (defaults to INFO).
+
+- Not yet implemented (empty placeholder packages):
+    agents/specialists/{career,finance,love,sports}
+    methodologies/{kp,vedic}
+    orchestration/{dispatcher,manager}
+    common/tools
+    common/knowledge/retrieval
+    common/communication
+
+- app/streamlit_app.py
+    Sign in / create account UI (backed by app/auth.py), a query form with
+    a methodology selector, and a call to POST /run on the backend. Still
+    shows a raw "Final state" / "Execution trace" debug panel for
+    development - this is expected to be removed once the app is opened up
+    to a general audience, now that backend logging covers that need.
+
+- app/auth.py
+    Local JSON-file user store (app/data/users.json) with scrypt password
+    hashing and constant-time comparison. Fine for local/dev use, not
+    intended as a production auth system.
+
+Logging
+-------
+Backend and frontend now use Python's standard `logging` module instead of
+print statements or debug UI panels:
+  - Backend modules get a logger via
+    `astroweave.common.config.get_logger(__name__)`, which configures the
+    root logger on first use (format: timestamp, level, logger name,
+    message). Level is controlled by the ASTROWEAVE_LOG_LEVEL env var.
+  - The Streamlit app configures logging.basicConfig() directly at import
+    time and logs request submissions, API responses, and connection
+    errors.
+  - Graph nodes log at DEBUG when they execute (useful once real logic
+    replaces the pass-throughs); the API logs at INFO/WARNING for request
+    handling.
+
+Tests
+-----
+tests/unit - auth logic, orchestrator graph routing, specialist graph
+routing and the "keep latest five stage results" reducer.
+tests/integration - /health and /run behavior against the FastAPI app.
+Run with: PYTHONPATH=src pytest tests/
+
+How to run locally
+-------------------
+Backend:  PYTHONPATH=src uvicorn astroweave.api.main:app --reload
+Frontend: streamlit run app/streamlit_app.py
+
+What's next (not a commitment, just current direction)
+---------------------------------------------------------
+- Implement real logic in orchestration/manager and orchestration/dispatcher.
+- Implement the first domain specialist end-to-end (likely career or love).
+- Wire up a methodology (Vedic or KP) with real astrology calculations.
+- Add retrieval/knowledge sources under common/knowledge.
+- Remove the frontend debug panels (Final state / Execution trace) once the
+  backend is doing real work and logging is trusted as the source of truth.

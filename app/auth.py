@@ -3,12 +3,15 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
 import os
 import secrets
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 from typing import Any
 
+
+logger = logging.getLogger(__name__)
 
 USERS_FILE = Path(
     os.environ.get(
@@ -56,13 +59,16 @@ def _password_matches(password: str, encoded_hash: str) -> bool:
 
 def load_users() -> dict[str, dict[str, str]]:
     if not USERS_FILE.exists():
+        logger.info("Users file not found at %s; starting with no users", USERS_FILE)
         return {}
     try:
         with USERS_FILE.open(encoding="utf-8") as file:
             users = json.load(file)
     except (OSError, json.JSONDecodeError):
+        logger.exception("Failed to load users file at %s", USERS_FILE)
         return {}
     if not isinstance(users, dict):
+        logger.warning("Users file at %s has unexpected format; ignoring contents", USERS_FILE)
         return {}
     return {
         email: record
@@ -90,6 +96,7 @@ def save_users(users: dict[str, dict[str, str]]) -> None:
 def create_user(users: dict[str, dict[str, str]], email: str, name: str, password: str) -> None:
     users[email] = {"name": name, "password_hash": _password_hash(password)}
     save_users(users)
+    logger.info("Created new user account email=%s", email)
 
 
 def authenticate_user(
@@ -97,5 +104,7 @@ def authenticate_user(
 ) -> dict[str, str] | None:
     record: dict[str, Any] | None = users.get(email)
     if record is None or not _password_matches(password, record["password_hash"]):
+        logger.warning("Authentication failed email=%s", email)
         return None
+    logger.info("Authentication succeeded email=%s", email)
     return {"email": email, "name": record["name"]}
