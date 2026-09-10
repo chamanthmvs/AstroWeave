@@ -9,7 +9,7 @@ from langgraph.graph import END, START, StateGraph
 from astroweave.agents.specialists import SPECIALIST_PROMPTS
 from astroweave.common.config import get_logger
 from astroweave.common.context import Context
-from astroweave.common.llm import get_llm, parse_json_response
+from astroweave.common.llm import ContextLimitExceededError, enforce_context_limit, get_llm, parse_json_response
 from astroweave.common.state import State
 
 logger = get_logger(__name__)
@@ -31,17 +31,21 @@ def _executor(state: State) -> State:
             "specialist_results": [],
         }
 
+    user_content = (
+        f"User question: {state.get('user_query', '')}\n"
+        f"Methodology: {state.get('methodology', 'vedic')}\n"
+        f"Birth chart data (JSON): {json.dumps(state.get('chart_data', {}))}"
+    )
+    try:
+        enforce_context_limit(f"{specialist_name}_executor", user_content)
+    except ContextLimitExceededError as error:
+        return {"errors": [str(error)], "specialist_results": []}
+
     llm = get_llm("specialist", agent_name=specialist_name)
     response = llm.invoke(
         [
             SystemMessage(content=prompt),
-            HumanMessage(
-                content=(
-                    f"User question: {state.get('user_query', '')}\n"
-                    f"Methodology: {state.get('methodology', 'vedic')}\n"
-                    f"Birth chart data (JSON): {json.dumps(state.get('chart_data', {}))}"
-                )
-            ),
+            HumanMessage(content=user_content),
         ]
     )
     try:
