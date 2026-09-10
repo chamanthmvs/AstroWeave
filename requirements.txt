@@ -3,8 +3,11 @@ httpx
 langgraph
 streamlit
 uvicorn
+python-dotenv
 
 # LLM providers used by astroweave.common.llm (install only what you use;
 # providers are looked up lazily, so unused ones don't need to be installed)
-# langchain-openai
+# "groq" reuses ChatOpenAI against Groq's OpenAI-compatible endpoint, so it
+# needs langchain-openai too - set GROQ_API_KEY in a local .env or the env.
+langchain-openai
 # langchain-anthropic
