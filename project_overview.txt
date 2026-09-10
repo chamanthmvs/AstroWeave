@@ -120,18 +120,19 @@ source/dataset is chosen. Concretely, as of this writing:
       beyond the label normalization above)
 
 - app/streamlit_app.py
-    Sign in / create account UI (backed by app/auth.py), a query form with a
-    methodology selector, and a "Birth details" sidebar section (date, time,
-    place, latitude, longitude, UTC offset) that's sent with every /run
-    request. Shows a spinner while the backend runs (LLM calls can take a
-    while) and a "Final state" debug panel with the raw state for
-    development - still expected to be removed once the app is opened up to
-    a general audience.
+    Sign in / register UI (backed by app/auth.py). Birth details (date, time,
+    place, latitude, longitude, UTC offset) are captured once at
+    registration and stored with the account - they are read-only in the
+    chat workspace and sent with every /run request as-is; editing them is a
+    separate, not-yet-built workflow. Query form has a methodology selector.
+    Shows a spinner while the backend runs (LLM calls can take a while) and a
+    "Final state" debug panel with the raw state for development - still
+    expected to be removed once the app is opened up to a general audience.
 
 - app/auth.py
-    Local JSON-file user store (app/data/users.json) with scrypt password
-    hashing and constant-time comparison. Fine for local/dev use, not
-    intended as a production auth system.
+    SQLite-backed user store (app/data/astroweave.db) with scrypt password
+    hashing and constant-time comparison. Not intended as a production auth
+    system, but a real registration flow rather than a flat file.
 
 Logging
 -------

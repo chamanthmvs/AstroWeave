@@ -1,16 +1,20 @@
 from __future__ import annotations
 
 import logging
+from datetime import date
 from uuid import uuid4
 
 import httpx
 import streamlit as st
 
-from auth import authenticate_user, create_user, load_users
+import auth
+from geocoding import INDIA_UTC_OFFSET_HOURS, geocode_indian_place
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s")
 logger = logging.getLogger(__name__)
+
+_MIN_BIRTH_DATE = date(1900, 1, 1)
 
 
 st.set_page_config(
@@ -98,12 +102,13 @@ st.markdown(
 )
 
 
-if "users" not in st.session_state:
-    st.session_state.users = load_users()
+@st.cache_resource
+def get_db_connection():
+    return auth.get_connection(check_same_thread=False)
+
+
 if "user" not in st.session_state:
     st.session_state.user = None
-if "auth_mode" not in st.session_state:
-    st.session_state.auth_mode = "Sign in"
 
 
 def initials(name: str) -> str:
@@ -115,39 +120,92 @@ def render_auth() -> None:
     st.markdown('<div class="brand"><span class="brand-mark" aria-hidden="true"></span> AstroWeave</div>', unsafe_allow_html=True)
     st.markdown('<div class="eyebrow">Specialist astrology, thoughtfully coordinated</div>', unsafe_allow_html=True)
     st.title("Your questions, read from every angle.")
-    st.markdown('<p class="auth-note">Sign in to continue your astrology workspace, or create an account to begin a new reading.</p>', unsafe_allow_html=True)
+    st.markdown('<p class="auth-note">Sign in to continue your astrology workspace, or register once to begin a new reading.</p>', unsafe_allow_html=True)
 
+    connection = get_db_connection()
     mode = st.radio("Account access", ["Sign in", "Create account"], horizontal=True, label_visibility="collapsed")
-    with st.form("auth_form"):
-        name = st.text_input("Your name", placeholder="e.g. Maya Patel") if mode == "Create account" else ""
-        email = st.text_input("Email", placeholder="you@example.com")
-        password = st.text_input("Password", type="password", placeholder="Enter your password")
-        submitted = st.form_submit_button("Continue", use_container_width=True)
 
-    if submitted:
-        normalized_email = email.strip().lower()
-        if not normalized_email or not password:
-            st.error("Enter your email and password to continue.")
-        elif mode == "Create account" and not name.strip():
-            st.error("Tell us your name first.")
-        elif mode == "Create account" and len(password) < 8:
-            st.error("Use at least 8 characters for your password.")
-        elif mode == "Create account":
-            if normalized_email in st.session_state.users:
-                st.error("An account with that email already exists.")
+    if mode == "Sign in":
+        with st.form("signin_form"):
+            email = st.text_input("Email", placeholder="you@example.com")
+            password = st.text_input("Password", type="password", placeholder="Enter your password")
+            submitted = st.form_submit_button("Continue", use_container_width=True)
+        if submitted:
+            normalized_email = email.strip().lower()
+            if not normalized_email or not password:
+                st.error("Enter your email and password to continue.")
             else:
-                create_user(st.session_state.users, normalized_email, name.strip(), password)
-                st.session_state.user = {"email": normalized_email, "name": name.strip()}
-                st.rerun()
-        else:
-            authenticated_user = authenticate_user(
-                st.session_state.users, normalized_email, password
+                authenticated_user = auth.authenticate_user(connection, normalized_email, password)
+                if authenticated_user is None:
+                    st.error("That email and password combination was not found.")
+                else:
+                    st.session_state.user = authenticated_user
+                    st.rerun()
+    else:
+        st.markdown(
+            '<p class="auth-note">Birth details are captured once here and used for every '
+            'reading afterwards - they can\'t be changed from the chat workspace. AstroWeave '
+            'currently only supports birth places within India.</p>',
+            unsafe_allow_html=True,
+        )
+        with st.form("register_form"):
+            name = st.text_input("Your name", placeholder="e.g. Maya Patel")
+            email = st.text_input("Email", placeholder="you@example.com")
+            password = st.text_input("Password", type="password", placeholder="At least 8 characters")
+            st.markdown('<div class="workspace-label">Birth details</div>', unsafe_allow_html=True)
+            date_unknown = st.checkbox("I don't know my exact date of birth")
+            birth_date = st.date_input(
+                "Birth date",
+                min_value=_MIN_BIRTH_DATE,
+                max_value=date.today(),
+                disabled=date_unknown,
             )
-            if authenticated_user is None:
-                st.error("That email and password combination was not found.")
+            if date_unknown:
+                st.warning(
+                    "Without a birth date, reading accuracy drops to roughly 60%. Enter it "
+                    "if you ever find it out - readings will be far more precise."
+                )
+            birth_time = st.time_input("Birth time")
+            place_name = st.text_input("Birth place", placeholder="e.g. Chennai, India")
+            submitted = st.form_submit_button("Create account", use_container_width=True)
+        if submitted:
+            normalized_email = email.strip().lower()
+            if not normalized_email or not password:
+                st.error("Enter your email and password to continue.")
+            elif not name.strip():
+                st.error("Tell us your name first.")
+            elif len(password) < 8:
+                st.error("Use at least 8 characters for your password.")
+            elif not place_name.strip():
+                st.error("Enter your birth place so a chart can be computed.")
             else:
-                st.session_state.user = authenticated_user
-                st.rerun()
+                geocoded = geocode_indian_place(place_name)
+                if geocoded is None:
+                    st.error(
+                        "We couldn't find that place in India - enter a nearby city name."
+                    )
+                else:
+                    try:
+                        created_user = auth.create_user(
+                            connection,
+                            normalized_email,
+                            name.strip(),
+                            password,
+                            {
+                                "date": birth_date.isoformat() if not date_unknown else "",
+                                "time": birth_time.strftime("%H:%M:%S"),
+                                "place_name": place_name.strip(),
+                                "latitude": geocoded["latitude"],
+                                "longitude": geocoded["longitude"],
+                                "utc_offset_hours": INDIA_UTC_OFFSET_HOURS,
+                                "date_known": not date_unknown,
+                            },
+                        )
+                    except ValueError as error:
+                        st.error(str(error))
+                    else:
+                        st.session_state.user = created_user
+                        st.rerun()
 
     st.markdown('</div>', unsafe_allow_html=True)
 
@@ -158,6 +216,7 @@ if st.session_state.user is None:
 
 
 user = st.session_state.user
+birth_details = user["birth_details"]
 with st.sidebar:
     st.markdown('<div class="brand"><span class="brand-mark" aria-hidden="true"></span> AstroWeave</div>', unsafe_allow_html=True)
     st.markdown(
@@ -171,12 +230,20 @@ with st.sidebar:
         conversation_id = st.text_input("Conversation ID", value="conversation-1")
         session_id = st.text_input("Session ID", value="session-1")
     with st.expander("Birth details", expanded=True):
-        birth_date = st.date_input("Birth date")
-        birth_time = st.time_input("Birth time")
-        place_name = st.text_input("Birth place", placeholder="e.g. Chennai, India")
-        birth_latitude = st.number_input("Latitude", min_value=-90.0, max_value=90.0, value=0.0, format="%.4f")
-        birth_longitude = st.number_input("Longitude", min_value=-180.0, max_value=180.0, value=0.0, format="%.4f")
-        utc_offset_hours = st.number_input("UTC offset (hours)", min_value=-12.0, max_value=14.0, value=5.5, step=0.5)
+        st.caption("Set once at registration - not editable here. Updating birth details is a separate workflow.")
+        if not birth_details.get("date_known", True):
+            st.info("Birth date unknown - reading accuracy is reduced to roughly 60%.")
+        st.markdown(
+            f'<div class="side-meta">'
+            f'<div class="meta-item"><span class="meta-label">Date</span><span class="meta-value">{birth_details["date"] or "Unknown"}</span></div>'
+            f'<div class="meta-item"><span class="meta-label">Time</span><span class="meta-value">{birth_details["time"]}</span></div>'
+            f'<div class="meta-item"><span class="meta-label">Place</span><span class="meta-value">{birth_details["place_name"] or "—"}</span></div>'
+            f'<div class="meta-item"><span class="meta-label">UTC offset</span><span class="meta-value">{birth_details["utc_offset_hours"]}</span></div>'
+            f'<div class="meta-item"><span class="meta-label">Latitude</span><span class="meta-value">{birth_details["latitude"]:.4f}</span></div>'
+            f'<div class="meta-item"><span class="meta-label">Longitude</span><span class="meta-value">{birth_details["longitude"]:.4f}</span></div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
     if st.button("Sign out", use_container_width=True):
         st.session_state.user = None
         st.rerun()
@@ -204,8 +271,6 @@ with st.container(border=True):
 if submitted:
     if not query.strip():
         st.warning("Enter an astrology question first.")
-    elif not place_name.strip():
-        st.warning("Enter your birth place so a chart can be computed.")
     else:
         payload = {
             "query": query,
@@ -214,14 +279,7 @@ if submitted:
             "username": user["email"],
             "methodology": methodology,
             "message_id": str(uuid4()),
-            "birth_details": {
-                "date": birth_date.isoformat(),
-                "time": birth_time.strftime("%H:%M:%S"),
-                "latitude": birth_latitude,
-                "longitude": birth_longitude,
-                "utc_offset_hours": utc_offset_hours,
-                "place_name": place_name.strip(),
-            },
+            "birth_details": birth_details,
         }
         logger.info(
             "Submitting reading request username=%s conversation_id=%s session_id=%s methodology=%s",
@@ -241,11 +299,13 @@ if submitted:
             if response.is_success:
                 body = response.json()
                 st.markdown('<div class="workspace-label">Your reading</div>', unsafe_allow_html=True)
-                st.success(body.get("answer", "Request completed."))
+                with st.container(border=True):
+                    st.markdown('<div class="panel-title"><h3>The reading</h3><span class="status">● Complete</span></div>', unsafe_allow_html=True)
+                    st.markdown(body.get("answer", "Request completed."))
                 with st.expander("Final state"):
                     st.json(body.get("state", {}))
             else:
                 logger.error("API returned HTTP %s: %s", response.status_code, response.text)
                 st.error(f"API returned HTTP {response.status_code}: {response.text}")
 
-st.markdown('<div class="hint">Your account and workspace are local to this demo. Connect the API from the sidebar when the backend is running.</div>', unsafe_allow_html=True)
+st.markdown('<div class="hint">Birth details are fixed at registration for every reading in this workspace. Connect the API from the sidebar when the backend is running.</div>', unsafe_allow_html=True)
