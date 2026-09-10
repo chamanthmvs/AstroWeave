@@ -112,11 +112,44 @@ How to run locally
 Backend:  PYTHONPATH=src uvicorn astroweave.api.main:app --reload
 Frontend: streamlit run app/streamlit_app.py
 
+Chart calculation service (chart_service/)
+--------------------------------------------
+Birth chart math (planet positions, ascendant, etc.) is powered by PyJHora, a
+mature Vedic/KP astrology library. PyJHora is licensed AGPL-3.0 (the PyPI page
+mislabels it as MIT - the actual bundled license text is AGPL-3.0). AGPL's
+network clause means a program that imports it in-process and is offered as a
+network service must release its combined source under AGPL too.
+
+To avoid pulling that obligation onto the whole AstroWeave backend, PyJHora is
+isolated in its own standalone service, chart_service/ (own requirements.txt,
+own FastAPI app, no shared code with src/astroweave). It only communicates
+with the rest of the system over plain HTTP:
+
+  POST /chart  { date, time, latitude, longitude, utc_offset_hours, place_name,
+                 varga_factors?, include_dasha_bhukti?, include_bhava_chart?,
+                 include_ashtakavarga? }
+  -> {
+       d1: { ascendant, planets } (sign/degree per planet, each with KP sub-lord chain),
+       divisional_charts: { D9, D10, D7, D12, D3, D24 by default, or whichever
+                             varga factors were requested } (sign/degree per planet),
+       dasha_bhukti: [ { maha_lord, bhukti_lord, start_date, start_hour, duration_years }, ... ],
+       bhava_chart: [ { sign, house_start/cusp/end_longitude, planets }, ... one per house ],
+       ashtakavarga: { binna: { <planet>: [12 points per sign] }, samudhaya: [12 totals] },
+     }
+
+Run it with:  uvicorn chart_service.main:app --port 8100
+The main backend calls it via astroweave.common.tools.chart_client.get_birth_chart(),
+configurable through the ASTROWEAVE_CHART_SERVICE_URL env var (defaults to
+http://127.0.0.1:8100). PyJHora's core chart/panchanga modules work headlessly
+(no PyQt6 needed) - only its desktop UI widgets require Qt, and those are not
+used here.
+
 What's next (not a commitment, just current direction)
 ---------------------------------------------------------
-- Implement real logic in orchestration/manager and orchestration/dispatcher.
+- Implement real logic in orchestration/manager and orchestration/dispatcher,
+  including calling chart_client.get_birth_chart() once a specialist needs it.
 - Implement the first domain specialist end-to-end (likely career or love).
-- Wire up a methodology (Vedic or KP) with real astrology calculations.
+- Wire up a methodology (Vedic or KP) using chart_service's output.
 - Add retrieval/knowledge sources under common/knowledge.
 - Remove the frontend debug panels (Final state / Execution trace) once the
   backend is doing real work and logging is trusted as the source of truth.

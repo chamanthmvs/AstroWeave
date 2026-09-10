@@ -1,0 +1,11 @@
+fastapi
+uvicorn
+PyJHora
+pyswisseph
+geocoder
+geopy
+pytz
+requests
+timezonefinder
+reverse_geocode
+numpy
