@@ -9,7 +9,9 @@ it's free, keyless, and reliable enough for city/town-level lookups.
 from __future__ import annotations
 
 import logging
+import ssl
 
+import certifi
 from geopy.exc import GeopyError
 from geopy.geocoders import Nominatim
 
@@ -17,7 +19,10 @@ logger = logging.getLogger(__name__)
 
 INDIA_UTC_OFFSET_HOURS = 5.5
 
-_geolocator = Nominatim(user_agent="astroweave-app")
+_geolocator = Nominatim(
+    user_agent="astroweave-app",
+    ssl_context=ssl.create_default_context(cafile=certifi.where()),
+)
 
 
 def geocode_indian_place(place_name: str) -> dict[str, object] | None:
