@@ -11,10 +11,12 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import base64
 import logging
 import os
 import secrets
 import sqlite3
+import time
 from pathlib import Path
 from typing import Any
 
@@ -31,6 +33,24 @@ _SCRYPT_N = 2**14
 _SCRYPT_R = 8
 _SCRYPT_P = 1
 _SALT_BYTES = 16
+_DEVELOPMENT_API_SECRET = "astroweave-local-development-only"
+
+
+def create_api_token(email: str, *, expires_at: int | None = None) -> str:
+    """Create the backend bearer token for an authenticated local user."""
+
+    secret = os.environ.get("ASTROWEAVE_AUTH_SECRET")
+    if not secret:
+        if os.environ.get("ASTROWEAVE_ENV", "development").lower() == "production":
+            raise RuntimeError("ASTROWEAVE_AUTH_SECRET is required in production")
+        secret = _DEVELOPMENT_API_SECRET
+    encoded_email = base64.urlsafe_b64encode(email.encode("utf-8")).decode("ascii")
+    expiration = expires_at or int(time.time()) + 12 * 60 * 60
+    payload = f"{encoded_email}.{expiration}"
+    signature = hmac.new(
+        secret.encode("utf-8"), payload.encode("ascii"), hashlib.sha256
+    ).hexdigest()
+    return f"{payload}.{signature}"
 
 
 def _password_hash(password: str) -> str:

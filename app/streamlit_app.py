@@ -217,6 +217,12 @@ if st.session_state.user is None:
 
 user = st.session_state.user
 birth_details = user["birth_details"]
+api_headers = {"Authorization": f"Bearer {auth.create_api_token(user['email'])}"}
+if "conversation_id" not in st.session_state:
+    st.session_state.conversation_id = str(uuid4())
+if "session_id" not in st.session_state:
+    st.session_state.session_id = str(uuid4())
+
 with st.sidebar:
     st.markdown('<div class="brand"><span class="brand-mark" aria-hidden="true"></span> AstroWeave</div>', unsafe_allow_html=True)
     st.markdown(
@@ -226,9 +232,62 @@ with st.sidebar:
     st.markdown('<div class="workspace-label">Your workspace</div>', unsafe_allow_html=True)
     st.markdown('<div class="side-meta"><div class="meta-item"><span class="meta-label">Method</span><span class="meta-value">Vedic + KP</span></div><div class="meta-item"><span class="meta-label">Readings</span><span class="meta-value">01</span></div></div>', unsafe_allow_html=True)
     api_url = st.text_input("API URL", value="http://127.0.0.1:8000")
+    if st.button("New conversation", use_container_width=True):
+        st.session_state.conversation_id = str(uuid4())
+        st.session_state.pop("pending_message_id", None)
+        st.rerun()
+    try:
+        conversation_response = httpx.get(
+            f"{api_url.rstrip('/')}/conversations",
+            headers=api_headers,
+            timeout=5,
+        )
+        conversation_response.raise_for_status()
+        recent_conversations = conversation_response.json().get("conversations", [])
+    except (httpx.RequestError, httpx.HTTPStatusError, ValueError):
+        recent_conversations = []
+        st.caption("Conversation history is unavailable while the API is offline.")
+    if recent_conversations:
+        st.markdown('<div class="workspace-label">Recent conversations</div>', unsafe_allow_html=True)
+        for conversation in recent_conversations[:10]:
+            conversation_id_value = conversation["conversation_id"]
+            title = conversation.get("title") or "Untitled conversation"
+            conversation_column, delete_column = st.columns([5, 1])
+            with conversation_column:
+                if st.button(
+                    title,
+                    key=f"resume-{conversation_id_value}",
+                    use_container_width=True,
+                    disabled=conversation_id_value == st.session_state.conversation_id,
+                ):
+                    st.session_state.conversation_id = conversation_id_value
+                    st.session_state.pop("pending_message_id", None)
+                    st.rerun()
+            with delete_column:
+                if st.button(
+                    "×",
+                    key=f"delete-{conversation_id_value}",
+                    help=f"Delete {title}",
+                    use_container_width=True,
+                ):
+                    try:
+                        delete_response = httpx.delete(
+                            f"{api_url.rstrip('/')}/conversations/{conversation_id_value}",
+                            headers=api_headers,
+                            timeout=5,
+                        )
+                    except httpx.RequestError:
+                        st.error("The conversation could not be deleted.")
+                    else:
+                        if delete_response.is_success:
+                            if conversation_id_value == st.session_state.conversation_id:
+                                st.session_state.conversation_id = str(uuid4())
+                            st.session_state.pop("pending_message_id", None)
+                            st.rerun()
+                        st.error("The conversation could not be deleted.")
     with st.expander("Session details"):
-        conversation_id = st.text_input("Conversation ID", value="conversation-1")
-        session_id = st.text_input("Session ID", value="session-1")
+        st.caption(f"Conversation ID: {st.session_state.conversation_id}")
+        st.caption(f"Session ID: {st.session_state.session_id}")
     with st.expander("Birth details", expanded=True):
         st.caption("Set once at registration - not editable here. Updating birth details is a separate workflow.")
         if not birth_details.get("date_known", True):
@@ -246,11 +305,34 @@ with st.sidebar:
         )
     if st.button("Sign out", use_container_width=True):
         st.session_state.user = None
+        st.session_state.pop("conversation_id", None)
+        st.session_state.pop("session_id", None)
+        st.session_state.pop("pending_message_id", None)
         st.rerun()
+
+conversation_id = st.session_state.conversation_id
+session_id = st.session_state.session_id
+try:
+    messages_response = httpx.get(
+        f"{api_url.rstrip('/')}/conversations/{conversation_id}/messages",
+        params={"limit": 50},
+        headers=api_headers,
+        timeout=5,
+    )
+    messages_response.raise_for_status()
+    visible_messages = messages_response.json().get("messages", [])
+except (httpx.RequestError, httpx.HTTPStatusError, ValueError):
+    visible_messages = []
 
 st.markdown('<div class="eyebrow">Personal astrology workspace</div>', unsafe_allow_html=True)
 st.title("Make room for the answer.")
 st.markdown('<p class="intro">Ask one clear question. AstroWeave coordinates the right specialists and methodologies, then brings the signal back to you.</p>', unsafe_allow_html=True)
+
+if visible_messages:
+    st.markdown('<div class="workspace-label">Conversation</div>', unsafe_allow_html=True)
+    for message in visible_messages:
+        with st.chat_message(message["role"]):
+            st.markdown(message["content"])
 
 st.markdown('<div class="workspace-label">New reading</div>', unsafe_allow_html=True)
 with st.container(border=True):
@@ -272,13 +354,15 @@ if submitted:
     if not query.strip():
         st.warning("Enter an astrology question first.")
     else:
+        if "pending_message_id" not in st.session_state:
+            st.session_state.pending_message_id = str(uuid4())
         payload = {
             "query": query,
             "conversation_id": conversation_id,
             "session_id": session_id,
             "username": user["email"],
             "methodology": methodology,
-            "message_id": str(uuid4()),
+            "message_id": st.session_state.pending_message_id,
             "birth_details": birth_details,
         }
         logger.info(
@@ -290,13 +374,19 @@ if submitted:
         )
         try:
             with st.spinner("Consulting the specialists..."):
-                response = httpx.post(f"{api_url.rstrip('/')}/run", json=payload, timeout=120)
+                response = httpx.post(
+                    f"{api_url.rstrip('/')}/run",
+                    json=payload,
+                    headers=api_headers,
+                    timeout=120,
+                )
         except httpx.RequestError as error:
             logger.exception("Could not connect to the API at %s", api_url)
             st.error(f"Could not connect to the API: {error}")
         else:
             logger.info("API responded with status %s", response.status_code)
             if response.is_success:
+                st.session_state.pop("pending_message_id", None)
                 body = response.json()
                 st.markdown('<div class="workspace-label">Your reading</div>', unsafe_allow_html=True)
                 with st.container(border=True):
@@ -305,6 +395,12 @@ if submitted:
                 with st.expander("Final state"):
                     st.json(body.get("state", {}))
             else:
+                try:
+                    error_code = response.json().get("detail", {}).get("code")
+                except ValueError:
+                    error_code = None
+                if error_code != "request_in_progress":
+                    st.session_state.pop("pending_message_id", None)
                 logger.error("API returned HTTP %s: %s", response.status_code, response.text)
                 st.error(f"API returned HTTP {response.status_code}: {response.text}")
 

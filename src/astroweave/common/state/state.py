@@ -38,6 +38,10 @@ class SpecialistResult(TypedDict):
 class State(TypedDict, total=False):
     user_query: str
     messages: Annotated[list[Message], operator.add]
+    session_history: list[Message]
+    conversation_history: list[Message]
+    history_persisted: bool
+    history_replayed: bool
     plan: list[str]
     pending_tasks: list[str]
     completed_tasks: list[str]
