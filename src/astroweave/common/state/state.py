@@ -39,6 +39,8 @@ class State(TypedDict, total=False):
     user_query: str
     messages: Annotated[list[Message], operator.add]
     plan: list[str]
+    pending_tasks: list[str]
+    completed_tasks: list[str]
     current_task: str
     tool_results: Annotated[list[ToolResult], operator.add]
     stage_results: Annotated[list[StageResult], keep_latest_five]

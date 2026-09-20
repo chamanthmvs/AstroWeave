@@ -37,3 +37,42 @@ def parse_json_response(node_name: str, raw_text: str) -> dict[str, Any]:
 
     log_reasoning(node_name, response)
     return response
+
+
+def invoke_json_response(
+    node_name: str,
+    llm: Any,
+    messages: list[Any],
+    max_attempts: int = 2,
+) -> dict[str, Any]:
+    """Invoke an LLM and retry once when its JSON response is malformed."""
+
+    if max_attempts < 1:
+        raise ValueError("max_attempts must be at least 1")
+
+    last_error: ValueError | None = None
+    for attempt in range(1, max_attempts + 1):
+        response = llm.invoke(messages)
+        content = response.content
+        metadata = getattr(response, "response_metadata", {}) or {}
+        logger.info(
+            "%s response attempt=%d/%d content_chars=%d finish_reason=%s",
+            node_name,
+            attempt,
+            max_attempts,
+            len(content),
+            metadata.get("finish_reason", "unknown"),
+        )
+        try:
+            return parse_json_response(node_name, content)
+        except ValueError as error:
+            last_error = error
+            if attempt < max_attempts:
+                logger.warning(
+                    "%s produced malformed JSON; retrying (%d/%d)",
+                    node_name,
+                    attempt + 1,
+                    max_attempts,
+                )
+
+    raise last_error or ValueError(f"{node_name} did not return JSON")

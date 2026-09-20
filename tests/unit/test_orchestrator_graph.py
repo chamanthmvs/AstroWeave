@@ -8,9 +8,9 @@ from astroweave.graphs.orchestrator.orchestrator_graph import (
 
 
 class OrchestratorGraphTests(unittest.TestCase):
-    @patch("astroweave.graphs.orchestrator.orchestrator_graph.run_dispatcher")
+    @patch("astroweave.graphs.orchestrator.orchestrator_graph.execute_specialist")
     @patch("astroweave.graphs.orchestrator.orchestrator_graph.get_llm")
-    def test_full_run_produces_a_synthesized_answer(self, mock_get_llm, mock_run_dispatcher):
+    def test_full_run_produces_a_synthesized_answer(self, mock_get_llm, mock_execute):
         llm = MagicMock()
         llm.invoke.side_effect = [
             MagicMock(
@@ -25,7 +25,7 @@ class OrchestratorGraphTests(unittest.TestCase):
             MagicMock(content="You are likely to be promoted this year."),
         ]
         mock_get_llm.return_value = llm
-        mock_run_dispatcher.return_value = {
+        mock_execute.return_value = {
             "chart_data": {"d1": {}},
             "specialist_results": [
                 {
@@ -58,7 +58,88 @@ class OrchestratorGraphTests(unittest.TestCase):
         self.assertEqual(result["specialists"], ["career"])
         self.assertEqual(result["methodology"], "vedic")
         self.assertEqual(result["answer"], "You are likely to be promoted this year.")
-        mock_run_dispatcher.assert_called_once()
+        self.assertEqual(result["pending_tasks"], [])
+        self.assertEqual(result["completed_tasks"], ["career"])
+        mock_execute.assert_called_once()
+        classifier_messages = llm.invoke.call_args_list[0].args[0]
+        self.assertIn("Birth details available: yes", classifier_messages[1].content)
+
+    @patch("astroweave.graphs.orchestrator.orchestrator_graph.execute_specialist")
+    @patch("astroweave.graphs.orchestrator.orchestrator_graph.get_llm")
+    def test_executes_each_planned_task_before_synthesis(self, mock_get_llm, mock_execute):
+        llm = MagicMock()
+        llm.invoke.side_effect = [
+            MagicMock(content=json.dumps({
+                "specialists": ["career", "finance"],
+                "methodology": "both",
+                "reasoning": "The question spans work and money.",
+            })),
+            MagicMock(content="Combined answer."),
+        ]
+        mock_get_llm.return_value = llm
+
+        def execute(state, runtime, specialist_name):
+            return {
+                "chart_data": {"d1": {}},
+                "specialist_results": [{
+                    "specialist": specialist_name,
+                    "analysis": f"{specialist_name} analysis",
+                    "conclusion": f"{specialist_name} conclusion",
+                    "confidence": "high",
+                }],
+                "errors": [],
+            }
+
+        mock_execute.side_effect = execute
+        graph = build_orchestrator_graph()
+        result = graph.invoke(
+            {"user_query": "How will my promotion affect my finances?"},
+            context={"birth_details": {"date": "1990-01-01"}},
+        )
+
+        self.assertEqual(
+            [call.args[2] for call in mock_execute.call_args_list],
+            ["career", "finance"],
+        )
+        self.assertEqual(result["completed_tasks"], ["career", "finance"])
+        self.assertEqual(len(result["specialist_results"]), 2)
+        self.assertEqual(result["answer"], "Combined answer.")
+
+    @patch("astroweave.graphs.orchestrator.orchestrator_graph.execute_specialist")
+    @patch("astroweave.graphs.orchestrator.orchestrator_graph.get_llm")
+    def test_continues_queue_after_one_specialist_fails(self, mock_get_llm, mock_execute):
+        llm = MagicMock()
+        llm.invoke.side_effect = [
+            MagicMock(content=json.dumps({
+                "specialists": ["career", "finance"],
+                "methodology": "vedic",
+                "reasoning": "Both domains are relevant.",
+            })),
+            MagicMock(content="Finance-only synthesis."),
+        ]
+        mock_get_llm.return_value = llm
+        mock_execute.side_effect = [
+            {"errors": ["career specialist failed"], "specialist_results": []},
+            {
+                "errors": [],
+                "specialist_results": [{
+                    "specialist": "finance",
+                    "analysis": "analysis",
+                    "conclusion": "conclusion",
+                    "confidence": "high",
+                }],
+            },
+        ]
+
+        result = build_orchestrator_graph().invoke(
+            {"user_query": "Question"},
+            context={"birth_details": {"date": "1990-01-01"}},
+        )
+
+        self.assertEqual(mock_execute.call_count, 2)
+        self.assertEqual(result["completed_tasks"], ["career", "finance"])
+        self.assertIn("career specialist failed", result["errors"])
+        self.assertEqual(result["answer"], "Finance-only synthesis.")
 
     @patch("astroweave.graphs.orchestrator.orchestrator_graph.get_llm")
     def test_empty_query_short_circuits_before_dispatch(self, mock_get_llm):
