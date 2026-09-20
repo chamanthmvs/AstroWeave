@@ -67,6 +67,10 @@ logic are not implemented yet.
 The fuller implementation snapshot and roadmap are published in the
 [here](https://chamanthmvs.github.io/AstroWeave/).
 
+For the complete functional behavior, architecture, API and state contracts,
+security assessment, operations guide, and implementation roadmap, see the
+[project documentation](docs/PROJECT_DOCUMENTATION.md).
+
 ## Local Development
 
 Install the root dependencies, configure an LLM provider with environment
