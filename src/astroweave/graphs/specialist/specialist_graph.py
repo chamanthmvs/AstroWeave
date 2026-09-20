@@ -9,7 +9,12 @@ from langgraph.graph import END, START, StateGraph
 from astroweave.agents.specialists import SPECIALIST_PROMPTS
 from astroweave.common.config import get_logger
 from astroweave.common.context import Context
-from astroweave.common.llm import ContextLimitExceededError, enforce_context_limit, get_llm, parse_json_response
+from astroweave.common.llm import (
+    ContextLimitExceededError,
+    enforce_context_limit,
+    get_llm,
+    invoke_json_response,
+)
 from astroweave.common.state import State
 
 logger = get_logger(__name__)
@@ -42,14 +47,15 @@ def _executor(state: State) -> State:
         return {"errors": [str(error)], "specialist_results": []}
 
     llm = get_llm("specialist", agent_name=specialist_name)
-    response = llm.invoke(
-        [
-            SystemMessage(content=prompt),
-            HumanMessage(content=user_content),
-        ]
-    )
     try:
-        parsed = parse_json_response(f"{specialist_name}_executor", response.content)
+        parsed = invoke_json_response(
+            f"{specialist_name}_executor",
+            llm,
+            [
+                SystemMessage(content=prompt),
+                HumanMessage(content=user_content),
+            ],
+        )
     except ValueError as error:
         return {"errors": [str(error)], "specialist_results": []}
 

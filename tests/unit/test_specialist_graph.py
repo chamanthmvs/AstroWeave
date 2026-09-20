@@ -72,6 +72,31 @@ class SpecialistGraphTests(unittest.TestCase):
 
         self.assertEqual(result["specialist_results"], [])
         self.assertTrue(result["errors"])
+        self.assertEqual(mock_get_llm.return_value.invoke.call_count, 2)
+
+    @patch("astroweave.graphs.specialist.specialist_graph.get_llm")
+    def test_malformed_llm_response_is_retried_once(self, mock_get_llm):
+        llm = MagicMock()
+        llm.invoke.side_effect = [
+            MagicMock(content='{\n  "'),
+            MagicMock(content=json.dumps({
+                "analysis": "Saturn supports sustained career progress.",
+                "conclusion": "A promotion is possible.",
+                "confidence": "medium",
+            })),
+        ]
+        mock_get_llm.return_value = llm
+
+        result = build_specialist_graph().invoke({
+            "user_query": "Will I get promoted?",
+            "current_task": "career",
+            "methodology": "vedic",
+            "chart_data": {"d1": {}},
+        })
+
+        self.assertEqual(llm.invoke.call_count, 2)
+        self.assertEqual(result["specialist_results"][0]["specialist"], "career")
+        self.assertEqual(result["errors"], [])
 
     def test_insufficient_result_forced_sufficient_in_v1(self):
         # v1 runs a single planner/executor pass; the evaluator always

@@ -58,6 +58,7 @@ def _build_groq(config: LLMConfig) -> Any:
     return ChatOpenAI(
         model=config.model,
         temperature=config.temperature,
+        max_tokens=config.max_tokens,
         reasoning_effort="medium",
         base_url="https://api.groq.com/openai/v1",
         api_key=os.environ.get("GROQ_API_KEY"),
