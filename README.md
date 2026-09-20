@@ -10,7 +10,7 @@ AstroWeave is an AI-powered astrology system where a central **Astrologer Manage
 User Question
       |
       v
-Resolve Conversation Context (placeholder)
+Resolve Conversation Context
       |
       +-- invalid query ------------------------------+
       |                                               |
@@ -30,6 +30,14 @@ Plan Specialist Tasks --> Select Next Task -- queue empty --+
              Collect Specialist Result
                          |
                          +-- tasks remain --> Select Next Task
+                         |
+                         +-- queue complete --> Synthesize Response
+                                                    |
+                                                    v
+                                      Persist Conversation Turn
+                                                    |
+                                                    v
+                                              Final Answer
 ```
 
 ## Core Concepts
@@ -38,6 +46,8 @@ Plan Specialist Tasks --> Select Next Task -- queue empty --+
 - **Domain specialization:** specialists focus on areas such as sports, relationships, career, education, and finance.
 - **Methodology separation:** Vedic and KP are analysis methodologies, not ordinary domain specialists.
 - **Queue-driven execution:** planned specialist tasks execute one at a time, are collected transparently, and continue until the queue is empty.
+- **Two-scope history:** current-session messages and prior-session conversation messages are loaded separately from SQLite and supplied as bounded context.
+- **Durable transcripts:** completed user/assistant turns are persisted atomically and can be resumed or deleted.
 - **Extensible design:** new domains, methodologies, tools, and knowledge sources can be added independently.
 
 ## Example Flow
@@ -60,9 +70,10 @@ For a question such as *“Will I get a new job this year?”*, AstroWeave can i
 The v2 flow is wired end-to-end: a Streamlit question reaches the FastAPI
 backend, an LLM-driven request classifier selects domain specialists, the task
 planner creates a queue, and each specialist subgraph runs before response
-synthesis produces one answer. Conversation-context resolution is currently an
-explicit placeholder. The knowledge/RAG layer and methodology-specific Vedic/KP
-logic are not implemented yet.
+synthesis produces one answer. Conversation-context resolution is now an
+implemented SQLite-backed stage with separate session and prior-conversation
+windows. The knowledge/RAG layer, rolling summaries, cross-conversation memory,
+and methodology-specific Vedic/KP logic are not implemented yet.
 
 The fuller implementation snapshot and roadmap are published in the
 [here](https://chamanthmvs.github.io/AstroWeave/).
@@ -80,6 +91,10 @@ variables, then run the backend and UI in separate terminals:
 pip install -r requirements.txt
 export ASTROWEAVE_LLM_PROVIDER=groq
 export ASTROWEAVE_LLM_MAX_TOKENS=4096
+export ASTROWEAVE_SESSION_HISTORY_LIMIT=12
+export ASTROWEAVE_CONVERSATION_HISTORY_LIMIT=8
+export ASTROWEAVE_REQUEST_CLAIM_TTL_SECONDS=1800
+export ASTROWEAVE_AUTH_SECRET=replace-with-a-long-random-secret
 export GROQ_API_KEY=your_key_here
 PYTHONPATH=src uvicorn astroweave.api.main:app --reload
 streamlit run app/streamlit_app.py
