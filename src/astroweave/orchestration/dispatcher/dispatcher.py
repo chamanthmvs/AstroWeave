@@ -71,6 +71,7 @@ def execute_specialist(
     user_query = state.get("user_query", "")
     handoff = {
         "user_query": user_query,
+        "messages": state.get("messages") or [],
         "current_task": specialist_name,
         "methodology": methodology,
         "chart_data": chart_data,

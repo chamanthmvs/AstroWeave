@@ -158,6 +158,65 @@ class OrchestratorGraphTests(unittest.TestCase):
         self.assertEqual(result["specialist_results"], [])
         self.assertEqual(result["answer"], "No question was provided.")
 
+    @patch("astroweave.graphs.orchestrator.orchestrator_graph.execute_specialist")
+    @patch("astroweave.graphs.orchestrator.orchestrator_graph.get_llm")
+    def test_loads_both_history_scopes_and_persists_final_turn(
+        self, mock_get_llm, mock_execute
+    ):
+        store = MagicMock()
+        store.load_context_messages.return_value = (
+            [{"message_id": "old-1", "role": "user", "content": "Earlier context"}],
+            [{"message_id": "session-1", "role": "assistant", "content": "Recent answer"}],
+        )
+        llm = MagicMock()
+        llm.invoke.side_effect = [
+            MagicMock(content=json.dumps({
+                "specialists": ["career"],
+                "methodology": "vedic",
+                "reasoning": "Career follow-up.",
+            })),
+            MagicMock(content="Follow-up response."),
+        ]
+        mock_get_llm.return_value = llm
+        mock_execute.return_value = {
+            "specialist_results": [{
+                "specialist": "career",
+                "analysis": "analysis",
+                "conclusion": "conclusion",
+                "confidence": "high",
+            }],
+            "errors": [],
+        }
+
+        result = build_orchestrator_graph().invoke(
+            {"user_query": "What about timing?"},
+            context={
+                "conversation_id": "conversation-1",
+                "session_id": "session-2",
+                "username": "user@example.com",
+                "message_id": "message-2",
+                "conversation_store": store,
+                "request_claim_token": "claim-token",
+            },
+        )
+
+        classifier_content = llm.invoke.call_args_list[0].args[0][1].content
+        self.assertIn("Earlier context", classifier_content)
+        self.assertIn("Recent answer", classifier_content)
+        self.assertEqual(result["conversation_history"][0]["content"], "Earlier context")
+        self.assertEqual(result["session_history"][0]["content"], "Recent answer")
+        self.assertTrue(result["history_persisted"])
+        store.persist_turn.assert_called_once_with(
+            conversation_id="conversation-1",
+            session_id="session-2",
+            owner="user@example.com",
+            user_message_id="message-2",
+            user_content="What about timing?",
+            assistant_content="Follow-up response.",
+            request_fingerprint=None,
+            claim_token="claim-token",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
