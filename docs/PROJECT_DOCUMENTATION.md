@@ -132,9 +132,11 @@ Stored fields:
 6. An always-available expander exposes the final orchestration state after a
   successful reading. It is not currently restricted to development mode.
 
-The UI allows the API URL, conversation ID, and session ID to be changed from
-the sidebar. Conversation and session IDs are request metadata only; they do
-not currently load or persist conversation history.
+The UI creates UUID-based conversation and session IDs. Users can start,
+resume, and delete recent conversations, inspect the current IDs, and read the
+stored transcript. Conversation IDs identify durable threads; session IDs
+separate messages created during the current signed-in workspace session from
+messages saved during prior sessions.
 
 ### 3.5 Multi-domain questions
 
@@ -147,6 +149,25 @@ If one specialist fails, its error is retained and the remaining queued tasks
 continue. If at least one result succeeds, synthesis uses the successful
 results. If no specialist result succeeds, the final answer is built from the
 recorded errors.
+
+### 3.6 Conversation history
+
+AstroWeave implements two bounded context scopes over one durable transcript:
+
+- **Session history:** up to 12 recent messages in the current conversation
+  written with the current session ID.
+- **Conversation history:** up to 8 recent messages in the same conversation
+  written during previous sessions.
+
+Both limits are configurable. The complete transcript remains in SQLite even
+though only bounded windows are sent to LLMs. The current user question and
+final assistant answer are persisted atomically after synthesis. Reusing a
+`message_id` and the same request content return the previously stored answer
+without rerunning the graph. Reusing the ID for different request data is a
+conflict.
+
+Conversation summaries and cross-conversation user memories are not yet
+implemented.
 
 ## 4. System Architecture
 
@@ -211,7 +232,7 @@ sequenceDiagram
     User->>UI: Submit question and methodology
     UI->>API: POST /run with saved birth details
     API->>O: invoke(initial state, context)
-    O->>O: Resolve conversation context placeholder
+    O->>O: Resolve prior-session and current-session context
     O->>L: Classify request
     L-->>O: Specialists, methodology, reasoning
     O->>O: Plan and select first task
@@ -226,6 +247,7 @@ sequenceDiagram
     end
     O->>L: Synthesize collected findings
     L-->>O: Plain-text final answer
+    O->>O: Persist user question and assistant answer
     O-->>API: Final state
     API-->>UI: Answer, state, empty execution trace
     UI-->>User: Render reading
@@ -250,7 +272,8 @@ flowchart TD
     CSR --> M{Tasks remain?}
     M -->|Yes| SNT
     M -->|No| SR
-    SR --> END((End))
+    SR --> PCT[Persist Conversation Turn]
+    PCT --> END((End))
 ```
 
 ### 6.2 Node responsibilities
@@ -259,9 +282,12 @@ flowchart TD
 
 - Calls the current manager validation helper.
 - Rejects an empty query by recording an error.
-- Does not load prior messages or persisted conversation state.
+- Loads bounded prior-session conversation history and current-session history
+  from SQLite.
+- Verifies that existing conversation and session IDs belong to the supplied
+  username.
+- Combines both scopes into `state.messages` for downstream prompts.
 - Routes errors directly to response synthesis.
-- **Status:** placeholder for future conversation-history resolution.
 
 #### `classify-request`
 
@@ -308,6 +334,15 @@ flowchart TD
 - Falls back to concatenated conclusions if the optional context limit is
   exceeded.
 - Returns recorded errors as the answer when there are no successful results.
+
+#### `persist-conversation-turn`
+
+- Runs after synthesis on both success and recoverable-error paths.
+- Atomically stores the current user question and final user-visible answer.
+- Creates or updates the conversation and session records.
+- Uses the request `message_id` as an idempotency key.
+- Stores no hidden chain-of-thought, classifier reasoning, or specialist
+  analysis as transcript messages.
 
 ### 6.3 Queue semantics
 
@@ -386,7 +421,11 @@ Unknown specialist names produce an error and no result.
 | Field | Type | Current role |
 |---|---|---|
 | `user_query` | `str` | Original user question |
-| `messages` | additive list | Reserved message history; not currently populated by `/run` |
+| `messages` | additive list | Combined bounded history supplied to downstream nodes |
+| `session_history` | `list[Message]` | Bounded messages from the current session |
+| `conversation_history` | `list[Message]` | Bounded messages from prior sessions |
+| `history_persisted` | `bool` | Whether the final turn exists durably |
+| `history_replayed` | `bool` | Whether an idempotent API retry returned a stored answer |
 | `plan` | `list[str]` | Classifier reasoning history |
 | `specialists` | `list[str]` | Selected domain specialists |
 | `methodology` | `str` | Normalized methodology |
@@ -414,15 +453,17 @@ Context is request-scoped and is not treated as mutable graph state.
 
 | Field | Current use |
 |---|---|
-| `conversation_id` | Logging/request identity only |
-| `session_id` | Logging/request identity only |
-| `username` | Logging/request identity only |
+| `conversation_id` | Durable thread identity and history lookup key |
+| `session_id` | Current-session history partition and persistence key |
+| `username` | Authenticated owner identity; must match bearer-token subject |
+| `message_id` | User-turn idempotency key |
 | `methodology` | User-forced methodology input |
 | `birth_details` | Chart-service request input |
+| `conversation_store` | Request-injected SQLite repository |
 
-The `Context` TypedDict currently declares conversation ID, session ID,
-username, and birth details. The runtime also supplies methodology even though
-that key is not yet declared in the TypedDict.
+The username is the ownership partition. Protected endpoints derive the
+authenticated identity from a signed bearer token and reject a `/run` body
+whose username differs from the token subject.
 
 ## 9. Main API Contract
 
@@ -449,6 +490,7 @@ Request body:
   "query": "How will a promotion affect my finances?",
   "conversation_id": "conversation-1",
   "session_id": "session-1",
+  "message_id": "550e8400-e29b-41d4-a716-446655440000",
   "username": "user@example.com",
   "methodology": "Let the system decide",
   "birth_details": {
@@ -471,6 +513,7 @@ Validation rules:
 - Longitude must be between `-180` and `180`.
 - Birth details are optional at the HTTP schema but required for specialist
   chart execution.
+- `message_id` is optional; the API generates a UUID when omitted.
 - Date and time formatting is described but not regex-validated by the main
   API; the chart service parses them.
 
@@ -501,12 +544,35 @@ Important current behavior:
 
 - The response exposes the complete final state, including full chart data.
 - `execution_trace` is always an empty list.
+- Duplicate requests with the same owned conversation and `message_id` return
+  the stored assistant answer without rerunning the graph.
+- The idempotency key is bound to a SHA-256 fingerprint of conversation,
+  session, query, methodology, and birth details. Different data returns `409`.
+- A durable pending claim prevents concurrent processes from executing the same
+  message ID; concurrent duplicates return `409` while work is in progress.
+- Claims abandoned by a crashed process can be reclaimed after a configurable
+  lease, 30 minutes by default with a 60-second minimum.
+- Each lease has a unique fencing token; stale workers cannot release or
+  complete a newer worker's reclaimed claim.
 - Validation failures return FastAPI/Pydantic `422` responses.
 - Unhandled graph failures are mapped to `502 Bad Gateway` and include the
   exception text in `detail`.
 - Recoverable graph errors may still return HTTP `200` with error text in state
   and possibly in the answer.
-- The API does not authenticate or authorize callers.
+- `/run` and conversation endpoints require a signed bearer token.
+
+### 9.3 Conversation endpoints
+
+`GET /conversations?limit=<1..100>` lists active conversations owned by the
+authenticated bearer-token subject, newest first.
+
+`GET /conversations/{conversation_id}/messages?limit=<1..100>`
+returns the most recent transcript messages in chronological order.
+
+`DELETE /conversations/{conversation_id}` deletes a conversation owned by the
+authenticated subject and cascades deletion to its messages.
+
+Existing IDs owned by another authenticated user return HTTP `403`.
 
 ## 10. Chart Service
 
@@ -676,9 +742,40 @@ with `ASTROWEAVE_USERS_DB`.
 
 ### 12.3 Current authentication boundary
 
-Authentication exists only in the Streamlit process. The FastAPI `/run`
-endpoint trusts the `username` string supplied by the caller and does not
-validate a Streamlit session, bearer token, cookie, or API key.
+After local SQLite password authentication, Streamlit creates an HMAC-SHA256
+bearer token containing the user's email and a 12-hour expiration. The API
+verifies the signature and expiry and uses the token subject for conversation
+ownership. `/run` additionally requires the body username to match that
+subject.
+
+Both processes must share `ASTROWEAVE_AUTH_SECRET`. Development falls back to
+a known local-only secret with a warning; production mode refuses to sign or
+verify without an explicit secret. Tokens are stateless and cannot currently
+be individually revoked before expiry.
+
+### 12.4 Conversation persistence
+
+Conversation records share the existing SQLite database by default. The store
+creates three tables:
+
+- `conversations`: globally unique ID, owner, title, timestamps, archive field
+- `conversation_sessions`: globally unique ID, owner, lifecycle timestamps
+- `conversation_messages`: user/assistant content, session, owner, and ordered
+  sequence number
+
+Writes use `BEGIN IMMEDIATE` and store each user/assistant turn in one
+transaction. Foreign keys cascade message deletion with conversations. WAL,
+foreign-key enforcement, and a 10-second busy timeout are enabled on
+conversation-store connections.
+
+The database path precedence is:
+
+1. `ASTROWEAVE_CONVERSATIONS_DB`
+2. `ASTROWEAVE_USERS_DB`
+3. `app/data/astroweave.db`
+
+The full transcript is durable history. Context loading remains bounded to
+avoid sending an ever-growing transcript to every model call.
 
 ## 13. Security and Privacy Assessment
 
@@ -703,23 +800,25 @@ validate a Streamlit session, bearer token, cookie, or API key.
 
 ### 13.3 Material current risks
 
-1. **Unauthenticated API:** anyone who can reach `/run` can invoke paid model
-   and chart operations and claim any username.
-2. **Sensitive response state:** `/run` returns full chart data and internal
+1. **Development fallback secret:** deployments that do not set production
+  mode and a strong `ASTROWEAVE_AUTH_SECRET` use a publicly known local secret.
+2. **No token revocation:** signed tokens remain valid until their 12-hour
+  expiry even after sign-out.
+3. **Sensitive response state:** `/run` returns full chart data and internal
    reasoning state to the client.
-3. **PII in logs:** manager logging includes the complete user query; auth logs
+4. **PII in logs:** manager logging includes the complete user query; auth logs
    include email addresses; chart logs include birth date and time.
-4. **Verbose error disclosure:** unhandled exception text is returned in the
+5. **Verbose error disclosure:** unhandled exception text is returned in the
    public `502` response.
-5. **No rate limiting:** API, sign-in, and registration attempts are not
+6. **No rate limiting:** API, sign-in, and registration attempts are not
    throttled.
-6. **Local session model:** Streamlit session state is not a production-grade
+7. **Local session model:** Streamlit session state is not a production-grade
    authentication session.
-7. **No CSRF/session hardening:** no explicit production web-security controls
+8. **No CSRF/session hardening:** no explicit production web-security controls
    exist around the local auth flow.
-8. **No data lifecycle controls:** account deletion, export, retention, and
-   consent workflows are not implemented.
-9. **External processing:** questions and chart data are sent to the configured
+9. **Partial data lifecycle controls:** conversation deletion exists, but
+  account deletion, export, retention, and consent workflows are not complete.
+10. **External processing:** questions and chart data are sent to the configured
    LLM provider; place names are sent to Nominatim during registration.
 
 Production deployment should not proceed until these risks are addressed and
@@ -742,6 +841,12 @@ defined.
 | Unhandled graph exception | Main API returns HTTP `502` |
 | Streamlit cannot reach API | User-facing connection error |
 | Geocoding failure | Registration blocked with user-facing message |
+| Conversation/session owned by another username | HTTP `403` |
+| Duplicate owned `message_id` | Stored answer replayed; graph not rerun |
+| Same `message_id`, different request | HTTP `409` |
+| Same `message_id` already running | HTTP `409` |
+| Missing, invalid, or expired bearer token | HTTP `401` |
+| Body username differs from token | HTTP `403` |
 
 The system does not currently classify errors into stable machine-readable
 codes. Most graph failures are human-readable strings.
@@ -761,7 +866,7 @@ Streamlit and the chart service currently initialize logging directly at
 ### 15.2 Logged orchestration events
 
 - API request metadata and query length
-- Conversation-context placeholder execution
+- Conversation-context resolution and separate scope counts
 - Every conditional route destination
 - Selected specialists and methodology
 - Task queue creation and selection
@@ -789,11 +894,13 @@ Streamlit and the chart service currently initialize logging directly at
 | `test_auth.py` | SQLite registration, password hashing, authentication |
 | `test_dispatcher.py` | Chart retrieval, specialist invocation, error propagation |
 | `test_llm_config.py` | Completion-token defaults and precedence |
-| `test_orchestrator_graph.py` | Full graph, task order, partial failure, short-circuit |
+| `test_orchestrator_graph.py` | Full graph, task order, history, persistence, partial failure |
 | `test_specialist_graph.py` | Specialist output, unknown specialist, JSON retry |
 | `test_api.py` | Health, run response, validation, `502` mapping |
+| `test_conversation_store.py` | Transactions, scope separation, ownership, replay, deletion |
+| `test_security_tokens.py` | Signing, expiry, tampering, and client parity |
 
-The verified suite contains 24 passing tests as of this document's last
+The verified suite contains 49 passing tests as of this document's last
 verification date.
 
 ### 16.2 Test boundaries
@@ -891,6 +998,11 @@ PYTHONPATH=src .venv/bin/python -m pytest -q
 | `ASTROWEAVE_CONTEXT_CHAR_LIMIT` | disabled | Optional handoff limit |
 | `ASTROWEAVE_CHART_SERVICE_URL` | `http://127.0.0.1:8100` | Chart API base URL |
 | `ASTROWEAVE_USERS_DB` | `app/data/astroweave.db` | SQLite database path |
+| `ASTROWEAVE_CONVERSATIONS_DB` | users DB path | Conversation DB override |
+| `ASTROWEAVE_SESSION_HISTORY_LIMIT` | `12` | Current-session message window |
+| `ASTROWEAVE_CONVERSATION_HISTORY_LIMIT` | `8` | Prior-session message window |
+| `ASTROWEAVE_AUTH_SECRET` | insecure development fallback | Bearer-token signing |
+| `ASTROWEAVE_REQUEST_CLAIM_TTL_SECONDS` | `1800` | Abandoned claim lease |
 | `GROQ_API_KEY` | none | Groq credential |
 | `OPENAI_API_KEY` | none | OpenAI credential |
 | `ANTHROPIC_API_KEY` | none | Anthropic credential |
@@ -904,7 +1016,7 @@ The current repository is optimized for local development. A production design
 must address:
 
 - Reverse proxy and TLS termination
-- API authentication and authorization
+- Replace local signed-token auth with a revocable production identity system
 - Durable, managed user storage and schema migrations
 - Secret management
 - Rate limiting and abuse controls
@@ -930,14 +1042,21 @@ before multi-worker production use.
 | Local registration and sign-in | Implemented | SQLite + scrypt |
 | India-only geocoding | Implemented | Nominatim, fixed IST offset |
 | Read-only birth profile | Implemented | No edit workflow |
-| Main API health and run endpoints | Implemented | No API auth |
+| Main API health and run endpoints | Implemented | Signed bearer token required |
 | v2 queue-driven orchestrator | Implemented | Sequential tasks |
 | Career, finance, love, sports prompts | Implemented | Shared graph |
 | Full chart-service integration | Implemented | PyJHora HTTP service |
 | Configurable LLM providers/models | Implemented | Env hierarchy |
 | Malformed JSON retry | Implemented | One retry |
 | Partial specialist failure | Implemented | Remaining queue continues |
-| Conversation history | Placeholder | Node exists; no persistence/load |
+| Durable conversation transcripts | Implemented | SQLite, owner-filtered |
+| Current-session history | Implemented | Bounded to 12 messages by default |
+| Prior-session conversation history | Implemented | Bounded to 8 messages by default |
+| Conversation list/resume | Implemented | API and Streamlit controls |
+| Idempotent turn replay | Implemented | Durable claim + content fingerprint |
+| Conversation deletion | Implemented | Owner-checked API endpoint |
+| Conversation summaries | Planned | Needed for older long threads |
+| Cross-conversation user memory | Planned | Requires explicit consent model |
 | Execution trace response | Placeholder | Always empty |
 | Specialist replanning/tool loop | Placeholder | Graph shape exists; evaluator always true |
 | Unknown birth-date chart strategy | Placeholder | UI/storage only |
@@ -1006,11 +1125,12 @@ before multi-worker production use.
 
 ### Priority 2: product capability
 
-1. Implement conversation persistence and context resolution.
-2. Build methodology-specific Vedic and KP execution paths.
-3. Add source-grounded retrieval and citations.
-4. Implement birth-detail editing and recalculation policy.
-5. Remove or restrict the always-visible final-state panel and replace it with
+1. Add rolling conversation summaries for older transcript segments.
+2. Add explicit, user-approved cross-conversation memory controls.
+3. Build methodology-specific Vedic and KP execution paths.
+4. Add source-grounded retrieval and citations.
+5. Implement birth-detail editing and recalculation policy.
+6. Remove or restrict the always-visible final-state panel and replace it with
   user-safe diagnostics.
 
 ### Priority 3: scale and operations
