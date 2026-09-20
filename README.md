@@ -57,7 +57,7 @@ For a question such as *“Will I get a new job this year?”*, AstroWeave can i
 
 **This project is still in progress and is not production-ready.**
 
-The v1 flow is wired end-to-end: a Streamlit question reaches the FastAPI
+The v2 flow is wired end-to-end: a Streamlit question reaches the FastAPI
 backend, an LLM-driven request classifier selects domain specialists, the task
 planner creates a queue, and each specialist subgraph runs before response
 synthesis produces one answer. Conversation-context resolution is currently an
