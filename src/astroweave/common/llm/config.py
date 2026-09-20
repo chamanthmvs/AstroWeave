@@ -15,6 +15,7 @@ if not load_dotenv(f".env.{_env_name}"):
 _DEFAULT_PROVIDER = "groq"
 _DEFAULT_MODEL = "openai/gpt-oss-120b"
 _DEFAULT_TEMPERATURE = 0.2
+_DEFAULT_MAX_TOKENS = 4096
 
 
 @dataclass(frozen=True)
@@ -24,6 +25,7 @@ class LLMConfig:
     provider: str
     model: str
     temperature: float
+    max_tokens: int
 
 
 def _first_env(names: list[str]) -> str | None:
@@ -69,9 +71,13 @@ def resolve_llm_config(role: str, agent_name: str | None = None) -> LLMConfig:
     temperature_raw = _first_env(
         _env_names("ASTROWEAVE_LLM_TEMPERATURE", role_key, agent_key)
     )
+    max_tokens_raw = _first_env(
+        _env_names("ASTROWEAVE_LLM_MAX_TOKENS", role_key, agent_key)
+    )
 
     return LLMConfig(
         provider=(provider or _DEFAULT_PROVIDER).lower(),
         model=model or _DEFAULT_MODEL,
         temperature=float(temperature_raw) if temperature_raw else _DEFAULT_TEMPERATURE,
+        max_tokens=int(max_tokens_raw) if max_tokens_raw else _DEFAULT_MAX_TOKENS,
     )
