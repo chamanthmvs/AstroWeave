@@ -1125,7 +1125,7 @@ before multi-worker production use.
 
 ### Priority 0: production blockers
 
-1. Add authentication/authorization to the main API.
+1. Replace local signed tokens with a revocable production identity provider.
 2. Stop returning full internal state and chart data by default.
 3. Redact PII and model reasoning from production logs.
 4. Define unknown-birth-date behavior before allowing those accounts to run.
