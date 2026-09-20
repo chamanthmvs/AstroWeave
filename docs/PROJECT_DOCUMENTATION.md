@@ -926,6 +926,23 @@ Real local end-to-end verification has exercised:
 The real two-specialist verification completed with two high-confidence
 results, one chart request, no state errors, and a synthesized answer.
 
+An expanded authenticated matrix on 2026-09-20 also verified:
+
+- Career, love, and sports questions routed to their expected specialists
+- An explicit two-part career/finance question executed both specialists
+- Same-session follow-up loaded two current-session messages
+- New-session continuation loaded four prior-session messages
+- Exact request replay returned the canonical answer in approximately 2 ms
+- Changed payload with the same message ID returned `409 request_conflict`
+- Missing authentication returned `401`; cross-user transcript access returned
+  `403`
+- All test conversations were deleted after verification
+
+A less explicit question about how changing jobs affects finances selected only
+the finance specialist. This is consistent with the classifier's instruction to
+choose the smallest sufficient specialist set; explicit multi-part wording is
+required when validating multi-specialist execution deterministically.
+
 ## 17. Local Development
 
 ### 17.1 Main environment
