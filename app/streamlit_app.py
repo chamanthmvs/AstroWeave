@@ -8,7 +8,11 @@ import httpx
 import streamlit as st
 
 import auth
-from geocoding import INDIA_UTC_OFFSET_HOURS, geocode_indian_place
+from geocoding import (
+    INDIA_UTC_OFFSET_HOURS,
+    GeocodingServiceError,
+    geocode_indian_place,
+)
 
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s - %(message)s")
@@ -179,33 +183,37 @@ def render_auth() -> None:
             elif not place_name.strip():
                 st.error("Enter your birth place so a chart can be computed.")
             else:
-                geocoded = geocode_indian_place(place_name)
-                if geocoded is None:
-                    st.error(
-                        "We couldn't find that place in India - enter a nearby city name."
-                    )
+                try:
+                    geocoded = geocode_indian_place(place_name)
+                except GeocodingServiceError as error:
+                    st.error(str(error))
                 else:
-                    try:
-                        created_user = auth.create_user(
-                            connection,
-                            normalized_email,
-                            name.strip(),
-                            password,
-                            {
-                                "date": birth_date.isoformat() if not date_unknown else "",
-                                "time": birth_time.strftime("%H:%M:%S"),
-                                "place_name": place_name.strip(),
-                                "latitude": geocoded["latitude"],
-                                "longitude": geocoded["longitude"],
-                                "utc_offset_hours": INDIA_UTC_OFFSET_HOURS,
-                                "date_known": not date_unknown,
-                            },
+                    if geocoded is None:
+                        st.error(
+                            "We couldn't find that place in India - enter a nearby city name."
                         )
-                    except ValueError as error:
-                        st.error(str(error))
                     else:
-                        st.session_state.user = created_user
-                        st.rerun()
+                        try:
+                            created_user = auth.create_user(
+                                connection,
+                                normalized_email,
+                                name.strip(),
+                                password,
+                                {
+                                    "date": birth_date.isoformat() if not date_unknown else "",
+                                    "time": birth_time.strftime("%H:%M:%S"),
+                                    "place_name": place_name.strip(),
+                                    "latitude": geocoded["latitude"],
+                                    "longitude": geocoded["longitude"],
+                                    "utc_offset_hours": INDIA_UTC_OFFSET_HOURS,
+                                    "date_known": not date_unknown,
+                                },
+                            )
+                        except ValueError as error:
+                            st.error(str(error))
+                        else:
+                            st.session_state.user = created_user
+                            st.rerun()
 
     st.markdown('</div>', unsafe_allow_html=True)
 
