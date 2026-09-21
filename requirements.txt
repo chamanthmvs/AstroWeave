@@ -5,6 +5,7 @@ streamlit
 uvicorn
 python-dotenv
 geopy
+certifi
 
 # LLM providers used by astroweave.common.llm (install only what you use;
 # providers are looked up lazily, so unused ones don't need to be installed)
