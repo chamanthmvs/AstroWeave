@@ -85,7 +85,8 @@ Implemented registration behavior:
    birth place.
 2. Passwords must contain at least eight characters at the UI boundary.
 3. The user may mark the exact birth date as unknown.
-4. Birth place is resolved through Nominatim with `country_codes="in"`.
+4. Birth place is resolved through Nominatim with `country_codes="in"` and a
+  certifi-backed verified TLS context.
 5. The application uses a fixed UTC offset of `+5.5` hours.
 6. The account and birth details are stored in a local SQLite database.
 7. The user is signed in immediately after successful registration.
@@ -840,7 +841,8 @@ defined.
 | Synthesis context too large | Raw specialist conclusions returned with error |
 | Unhandled graph exception | Main API returns HTTP `502` |
 | Streamlit cannot reach API | User-facing connection error |
-| Geocoding failure | Registration blocked with user-facing message |
+| Place not found in India | Registration blocked with nearby-city guidance |
+| Geocoding provider/TLS failure | Distinct temporary-service error shown |
 | Conversation/session owned by another username | HTTP `403` |
 | Duplicate owned `message_id` | Stored answer replayed; graph not rerun |
 | Same `message_id`, different request | HTTP `409` |
@@ -899,8 +901,9 @@ Streamlit and the chart service currently initialize logging directly at
 | `test_api.py` | Health, run response, validation, `502` mapping |
 | `test_conversation_store.py` | Transactions, scope separation, ownership, replay, deletion |
 | `test_security_tokens.py` | Signing, expiry, tampering, and client parity |
+| `test_geocoding.py` | Indian place match, no-result, provider failure |
 
-The verified suite contains 49 passing tests as of this document's last
+The verified suite contains 52 passing tests as of this document's last
 verification date.
 
 ### 16.2 Test boundaries
