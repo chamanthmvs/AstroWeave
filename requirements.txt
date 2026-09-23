@@ -1,6 +1,7 @@
 fastapi
 httpx
 langgraph
+pydantic>=2,<3
 streamlit
 uvicorn
 python-dotenv
