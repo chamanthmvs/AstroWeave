@@ -4,6 +4,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 
+from astroweave.agents.specialists import SPECIALIST_REGISTRY
 from astroweave.common.communication import format_message_history
 from astroweave.common.config import get_logger
 from astroweave.common.context import Context
@@ -95,7 +96,20 @@ def _classify_request(state: State, runtime: Runtime[Context]) -> State:
     except (ContextLimitExceededError, ValueError) as error:
         return {"errors": [str(error)]}
 
-    specialists = parsed.get("specialists") or []
+    requested_specialists = parsed.get("specialists") or []
+    specialists = [
+        name
+        for name in requested_specialists
+        if isinstance(name, str) and name in SPECIALIST_REGISTRY
+    ]
+    unknown_specialists = [
+        name for name in requested_specialists if name not in specialists
+    ]
+    if unknown_specialists:
+        logger.warning(
+            "classify-request ignored unregistered specialists=%s",
+            unknown_specialists,
+        )
     methodology = forced_methodology or parsed.get("methodology") or "vedic"
     plan = state.get("plan", []) + [parsed.get("reasoning", "")]
     logger.info(
