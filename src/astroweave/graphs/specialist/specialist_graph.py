@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
 
-from astroweave.agents.specialists import SPECIALIST_PROMPTS
+from astroweave.agents.specialists import SPECIALIST_REGISTRY
 from astroweave.common.communication import format_message_history
 from astroweave.common.config import get_logger
 from astroweave.common.context import Context
@@ -30,8 +30,8 @@ def _executor(state: State) -> State:
     specialist_name = state.get("current_task", "")
     logger.debug("specialist node 'executor' executing for '%s'", specialist_name)
 
-    prompt = SPECIALIST_PROMPTS.get(specialist_name)
-    if prompt is None:
+    agent = SPECIALIST_REGISTRY.get(specialist_name)
+    if agent is None:
         return {
             "errors": [f"Unknown specialist '{specialist_name}'"],
             "specialist_results": [],
@@ -55,7 +55,7 @@ def _executor(state: State) -> State:
             f"{specialist_name}_executor",
             llm,
             [
-                SystemMessage(content=prompt),
+                SystemMessage(content=agent.prompt),
                 HumanMessage(content=user_content),
             ],
         )
@@ -104,8 +104,8 @@ def _route_after_evaluation(state: Mapping[str, object]) -> str:
 def build_specialist_graph():
     """Build the shared workflow used by every specialist astrologer.
 
-    The executor looks up a domain prompt from SPECIALIST_PROMPTS by
-    `state["current_task"]`, calls that specialist's configured LLM with the
+    The executor looks up an agent from SPECIALIST_REGISTRY by
+    `state["current_task"]`, calls that agent's configured LLM with the
     user's question, methodology, and chart data, and records the parsed
     analysis/conclusion/confidence into `state["specialist_results"]`.
     """

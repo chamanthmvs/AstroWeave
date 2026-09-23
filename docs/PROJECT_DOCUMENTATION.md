@@ -1,8 +1,8 @@
 # AstroWeave Project Documentation
 
-**Document status:** Living engineering reference  
-**Application generation:** v2 queue-driven orchestrator  
-**Last verified:** 2026-09-20  
+**Document status:** Living engineering reference<br>
+**Application generation:** v3 registry foundation on the v2 queue-driven orchestrator<br>
+**Last verified:** 2026-09-23<br>
 **Production readiness:** Prototype; not production-ready
 
 ## 1. Purpose of This Document
@@ -67,9 +67,11 @@ to analyze it. Current methodology values are:
 - `both`
 - system-selected, represented in the UI as `Let the system decide`
 
-These values are required by prompts but are not yet enforced by a runtime
-schema. Syntactically valid JSON containing an unexpected methodology or
-specialist name can pass parsing and fail or degrade later in the workflow.
+Methodology values are required by prompts but are not yet enforced by a
+runtime schema. Specialist names are different: the orchestrator filters
+classifier output through `SPECIALIST_REGISTRY`, so an unregistered name is
+discarded before task planning. If no registered specialist remains, planning
+records an error and no specialist is dispatched.
 
 Methodology selection is passed to specialist prompts. The
 `methodologies/vedic` and `methodologies/kp` packages do not yet contain
@@ -179,6 +181,7 @@ implemented.
 | Web UI | Streamlit | `127.0.0.1:8501` | Account flow and reading workspace |
 | Main API | FastAPI | `127.0.0.1:8000` | HTTP boundary and orchestrator invocation |
 | Orchestrator | LangGraph | In main API process | Routing, task queue, collection, synthesis |
+| Agent registry | Python registry | In main API process | Registered agent definitions and lookup |
 | Specialist graph | LangGraph | In main API process | Domain-specific LLM analysis |
 | Chart service | FastAPI + PyJHora | `127.0.0.1:8100` | Deterministic chart calculations |
 | User store | SQLite | `app/data/astroweave.db` | Local accounts and birth details |
@@ -195,7 +198,10 @@ flowchart LR
     UI --> API[FastAPI /run]
     API --> Orchestrator[v2 LangGraph orchestrator]
     Orchestrator --> LLM[Configured LLM provider]
+    Orchestrator --> AgentRegistry[Specialist agent registry]
+    AgentRegistry --> ToolRegistry[Per-agent tool registries]
     Orchestrator --> Specialist[Specialist subgraph]
+    Specialist --> AgentRegistry
     Specialist --> LLM
     Orchestrator --> ChartClient[Chart HTTP client]
     ChartClient --> ChartService[PyJHora chart service]
@@ -210,8 +216,10 @@ flowchart LR
 | `src/astroweave/api/` | Main FastAPI boundary |
 | `src/astroweave/graphs/orchestrator/` | v2 top-level graph and prompts |
 | `src/astroweave/graphs/specialist/` | Shared specialist graph |
-| `src/astroweave/agents/specialists/` | Specialist prompt registry and prompts |
-| `src/astroweave/common/` | State, context, LLM, logging, and tool clients |
+| `src/astroweave/agents/registry.py` | Agent definition and registry abstractions |
+| `src/astroweave/agents/specialists/` | Registered specialist definitions and prompts |
+| `src/astroweave/common/tools/` | Tool contracts, decorator, per-agent registry, and chart client |
+| `src/astroweave/common/` | State, context, LLM, logging, and shared infrastructure |
 | `src/astroweave/orchestration/` | Manager and specialist dispatch helpers |
 | `src/astroweave/methodologies/` | Methodology normalization and future engines |
 | `tests/unit/` | Unit tests for auth, config, graphs, and dispatcher |
@@ -296,6 +304,8 @@ flowchart TD
 - Tells the classifier whether birth details are available without sending the
   full birth-details payload.
 - Expects JSON containing `specialists`, `methodology`, and `reasoning`.
+- Keeps only specialist names present in `SPECIALIST_REGISTRY` and logs ignored
+  names. This prevents model-generated agent names from entering the queue.
 - Honors a valid user-forced methodology over the model-selected methodology.
 - Defaults methodology to `vedic` when neither source provides one.
 - Appends routing reasoning to `state.plan`.
@@ -356,8 +366,9 @@ flowchart TD
 
 ## 7. Specialist Graph
 
-Each registered domain uses the same specialist graph implementation with a
-different prompt.
+Each registered domain uses the same specialist graph implementation. The
+executor resolves its `AgentDefinition` from `SPECIALIST_REGISTRY` and uses
+the prompt stored on that definition.
 
 ```mermaid
 flowchart TD
@@ -414,6 +425,77 @@ The graph stores the result as:
 ```
 
 Unknown specialist names produce an error and no result.
+
+### 7.3 Agent registry
+
+`src/astroweave/agents/registry.py` defines the orchestrator-facing agent
+catalog:
+
+- `AgentDefinition` is an immutable dataclass containing `name`,
+  `description`, `prompt`, and a `ToolRegistry` owned by that agent.
+- `AgentRegistry` supports `register()`, optional `get()`, strict `require()`,
+  membership checks, iteration, and length.
+- Duplicate agent names raise `ValueError` rather than silently replacing an
+  existing definition.
+- `SPECIALIST_REGISTRY` contains the `career`, `finance`, `love`, and `sports`
+  definitions. Each currently owns an independent empty tool registry.
+
+The registry replaces the former `SPECIALIST_PROMPTS` dictionary. This keeps
+the prompt and future agent-specific capabilities in one definition, gives the
+orchestrator a single source of truth for allowed agents, and avoids adding
+special-case imports or conditionals as specialists gain different tools.
+
+### 7.4 Tool contracts and per-agent registry
+
+`src/astroweave/common/tools/base.py` provides the common tool API:
+
+| Type | Purpose |
+|---|---|
+| `BaseToolReturnType` | Pydantic base response with `success: bool` and optional `error: str` |
+| `ToolType` | String enum; currently contains only `function` |
+| `ToolMetadata` | Pydantic metadata with `name`, `description`, `type`, and `returns` |
+| `BaseTool` | Abstract contract requiring `metadata` and `invoke()` |
+| `FunctionTool` | Callable adapter around a normal Python function |
+| `tool()` | Decorator that creates a `FunctionTool` from a function |
+
+`ToolMetadata.returns` stores the response model class, not a response
+instance. This lets callers inspect the declared response schema before a tool
+runs. `FunctionTool.invoke()` verifies at runtime that the function returned
+an instance of that declared model and raises `TypeError` for a contract
+violation. The decorator preserves the wrapped function's name, documentation,
+and inspectable signature.
+
+Tool responses can add fields while retaining the shared status contract:
+
+```python
+from astroweave.common.tools import BaseToolReturnType, tool
+
+
+class CareerFocusResult(BaseToolReturnType):
+    focus: str | None = None
+
+
+@tool(
+    name="career_focus",
+    description="Find the strongest career theme.",
+    returns=CareerFocusResult,
+)
+def career_focus(question: str) -> CareerFocusResult:
+    return CareerFocusResult(success=True, focus=question)
+```
+
+`src/astroweave/common/tools/registry.py` defines `ToolRegistry`. A registry
+owns the tools available to one agent and provides `register()`, `get()`,
+`require()`, iteration, membership, length, and metadata listing. Duplicate
+tool names raise `ValueError` to prevent accidental shadowing.
+
+This design deliberately separates registration from execution. The current
+specialist graph does not expose tool schemas to an LLM, parse tool calls, run
+tools, append `tool_results`, or replan after a tool response. Those behaviors
+remain future work. The existing chart client also remains an orchestrator
+dependency rather than being decorated as an agent tool because chart loading
+currently happens once before specialist invocation and is reused through
+shared state.
 
 ## 8. Shared State and Runtime Context
 
@@ -898,12 +980,14 @@ Streamlit and the chart service currently initialize logging directly at
 | `test_llm_config.py` | Completion-token defaults and precedence |
 | `test_orchestrator_graph.py` | Full graph, task order, history, persistence, partial failure |
 | `test_specialist_graph.py` | Specialist output, unknown specialist, JSON retry |
+| `test_agent_registry.py` | Built-in agents, per-agent tool ownership, duplicate rejection |
+| `test_tools.py` | Decorator metadata, invocation contract, tool lookup, duplicate rejection |
 | `test_api.py` | Health, run response, validation, `502` mapping |
 | `test_conversation_store.py` | Transactions, scope separation, ownership, replay, deletion |
 | `test_security_tokens.py` | Signing, expiry, tampering, and client parity |
 | `test_geocoding.py` | Indian place match, no-result, provider failure |
 
-The verified suite contains 52 passing tests as of this document's last
+The verified suite contains 61 passing tests as of this document's last
 verification date.
 
 ### 16.2 Test boundaries
@@ -1069,6 +1153,10 @@ before multi-worker production use.
 | Configurable LLM providers/models | Implemented | Env hierarchy |
 | Malformed JSON retry | Implemented | One retry |
 | Partial specialist failure | Implemented | Remaining queue continues |
+| Orchestrator agent registry | Implemented | Registered agents are the routing source of truth |
+| Per-agent tool registry | Implemented | Each agent owns an independent registry |
+| Base tool response and metadata models | Implemented | Pydantic v2 contracts |
+| Function tool decorator | Implemented | Adapts functions and enforces declared return model |
 | Durable conversation transcripts | Implemented | SQLite, owner-filtered |
 | Current-session history | Implemented | Bounded to 12 messages by default |
 | Prior-session conversation history | Implemented | Bounded to 8 messages by default |
@@ -1078,7 +1166,7 @@ before multi-worker production use.
 | Conversation summaries | Planned | Needed for older long threads |
 | Cross-conversation user memory | Planned | Requires explicit consent model |
 | Execution trace response | Placeholder | Always empty |
-| Specialist replanning/tool loop | Placeholder | Graph shape exists; evaluator always true |
+| Specialist tool execution/replanning loop | Placeholder | Registration exists; invocation loop does not |
 | Unknown birth-date chart strategy | Placeholder | UI/storage only |
 | Vedic/KP deterministic engines | Planned | Packages are stubs |
 | RAG and citations | Planned | Retrieval package is empty |
@@ -1094,12 +1182,25 @@ before multi-worker production use.
 1. Create `src/astroweave/agents/specialists/<name>/prompts.py`.
 2. Define a prompt that returns `analysis`, `conclusion`, and `confidence`.
 3. Export the prompt from that package.
-4. Register it in `SPECIALIST_PROMPTS`.
+4. Add an `AgentDefinition` to `SPECIALIST_REGISTRY`, including its name,
+  description, prompt, and optional `ToolRegistry`.
 5. Add it to the orchestrator routing prompt's allowed specialists.
 6. Add focused specialist, routing, and multi-task tests.
 7. Update this document and public capability copy.
 
-### 21.2 Add an LLM provider
+### 21.2 Add a tool to an agent
+
+1. Define a response model extending `BaseToolReturnType` for tool-specific
+  output fields.
+2. Decorate the implementation with `@tool(description=..., returns=...)`;
+  provide `name` only when the function name is not the desired public name.
+3. Register the resulting `FunctionTool` in the target agent's `ToolRegistry`.
+4. Add tests for metadata, successful output, error output, and invalid return
+  types.
+5. Do not assume registration makes the tool LLM-callable. Implement and test
+  the specialist execution loop before exposing tool instructions in prompts.
+
+### 21.3 Add an LLM provider
 
 1. Implement a builder accepting `LLMConfig`.
 2. Keep the provider SDK import inside the builder.
@@ -1107,7 +1208,7 @@ before multi-worker production use.
 4. Add the optional dependency and document its credential variable.
 5. Test configuration resolution and a real structured-response call.
 
-### 21.3 Add a methodology engine
+### 21.4 Add a methodology engine
 
 1. Define whether it transforms chart data, retrieves knowledge, changes
    prompts, or performs deterministic calculations.
@@ -1116,7 +1217,7 @@ before multi-worker production use.
 4. Define structured inputs, outputs, and provenance.
 5. Add unit tests and cross-methodology synthesis tests.
 
-### 21.4 Add a chart output
+### 21.5 Add a chart output
 
 1. Add a request flag and calculation in `chart_service/main.py`.
 2. Keep output JSON serializable and explicitly named.
@@ -1137,11 +1238,10 @@ before multi-worker production use.
 ### Priority 1: correctness and resilience
 
 1. Add chart-service unit and contract tests.
-2. Validate classifier output values against the specialist registry.
-3. Validate specialist confidence and required response fields.
-4. Add LLM/network timeout and retry policies with error classification.
-5. Implement dependency-aware health/readiness checks.
-6. Add a real execution trace or remove it from the API contract.
+2. Validate specialist confidence and required response fields.
+3. Add LLM/network timeout and retry policies with error classification.
+4. Implement dependency-aware health/readiness checks.
+5. Add a real execution trace or remove it from the API contract.
 
 ### Priority 2: product capability
 

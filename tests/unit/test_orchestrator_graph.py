@@ -160,6 +160,28 @@ class OrchestratorGraphTests(unittest.TestCase):
 
     @patch("astroweave.graphs.orchestrator.orchestrator_graph.execute_specialist")
     @patch("astroweave.graphs.orchestrator.orchestrator_graph.get_llm")
+    def test_unregistered_specialist_is_not_dispatched(
+        self, mock_get_llm, mock_execute
+    ):
+        mock_get_llm.return_value = MagicMock()
+        mock_get_llm.return_value.invoke.return_value = MagicMock(
+            content=json.dumps(
+                {
+                    "specialists": ["invented"],
+                    "methodology": "vedic",
+                    "reasoning": "Unsupported domain.",
+                }
+            )
+        )
+
+        result = build_orchestrator_graph().invoke({"user_query": "Question"})
+
+        mock_execute.assert_not_called()
+        self.assertEqual(result["specialists"], [])
+        self.assertIn("No specialist", result["answer"])
+
+    @patch("astroweave.graphs.orchestrator.orchestrator_graph.execute_specialist")
+    @patch("astroweave.graphs.orchestrator.orchestrator_graph.get_llm")
     def test_loads_both_history_scopes_and_persists_final_turn(
         self, mock_get_llm, mock_execute
     ):
