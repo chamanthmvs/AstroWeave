@@ -82,6 +82,10 @@ For the complete functional behavior, architecture, API and state contracts,
 security assessment, operations guide, and implementation roadmap, see the
 [project documentation](docs/PROJECT_DOCUMENTATION.md).
 
+For a code-level walkthrough of the backend request lifecycle, normal
+orchestration, specialist fastpath, and remote specialist handoff, see the
+[backend request walkthrough](docs/TECHNICAL_BACKEND_WALKTHROUGH.md).
+
 ## Local Development
 
 Install the root dependencies, configure an LLM provider with environment
