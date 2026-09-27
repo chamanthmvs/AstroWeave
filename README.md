@@ -86,6 +86,11 @@ For a code-level walkthrough of the backend request lifecycle, normal
 orchestration, specialist fastpath, and remote specialist handoff, see the
 [backend request walkthrough](docs/TECHNICAL_BACKEND_WALKTHROUGH.md).
 
+For a beginner-friendly practical explanation of A2A, including an executed
+remote-versus-local specialist comparison and the distinction between
+AstroWeave's current HTTP handoff and the formal A2A Protocol, see the
+[A2A practical guide](docs/A2A_PRACTICAL_GUIDE.md).
+
 ## Local Development
 
 Install the root dependencies, configure an LLM provider with environment
