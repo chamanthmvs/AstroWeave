@@ -1,4 +1,5 @@
 import json
+import threading
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -8,9 +9,64 @@ from astroweave.graphs.orchestrator.orchestrator_graph import (
 
 
 class OrchestratorGraphTests(unittest.TestCase):
+    @patch("astroweave.graphs.orchestrator.orchestrator_graph._get_chart_data", return_value=({"d1": {}}, []))
     @patch("astroweave.graphs.orchestrator.orchestrator_graph.execute_specialist")
     @patch("astroweave.graphs.orchestrator.orchestrator_graph.get_llm")
-    def test_full_run_produces_a_synthesized_answer(self, mock_get_llm, mock_execute):
+    def test_parallel_stage_precedes_dependent_stage(self, mock_llm, mock_execute, mock_chart):
+        barrier = threading.Barrier(2)
+        llm = MagicMock()
+        llm.invoke.side_effect = [
+            MagicMock(content=json.dumps({
+                "specialists": ["career", "finance", "love"],
+                "tasks": [
+                    {"specialist": "career", "depends_on": []},
+                    {"specialist": "finance", "depends_on": []},
+                    {"specialist": "love", "depends_on": ["career"]},
+                ],
+                "methodology": "vedic", "reasoning": "Three domains",
+            })),
+            MagicMock(content="Combined answer"),
+        ]
+        mock_llm.return_value = llm
+        handoffs = {}
+
+        def execute(state, runtime, specialist_name):
+            if specialist_name in ("career", "finance"):
+                barrier.wait(timeout=3)
+            handoffs[specialist_name] = [result["specialist"] for result in state["dependency_results"]]
+            return {"specialist_results": [{
+                "specialist": specialist_name, "analysis": "analysis",
+                "conclusion": "conclusion", "confidence": "high",
+            }]}
+
+        mock_execute.side_effect = execute
+        result = build_orchestrator_graph().invoke({"user_query": "Question"})
+
+        self.assertEqual(result["completed_tasks"], ["career", "finance", "love"])
+        self.assertEqual(handoffs, {"career": [], "finance": [], "love": ["career"]})
+        self.assertEqual(mock_chart.call_count, 2)
+
+    @patch("astroweave.graphs.orchestrator.orchestrator_graph.execute_specialist")
+    @patch("astroweave.graphs.orchestrator.orchestrator_graph.get_llm")
+    def test_rejects_dependency_cycle_before_dispatch(self, mock_llm, mock_execute):
+        mock_llm.return_value.invoke.return_value = MagicMock(content=json.dumps({
+            "specialists": ["career", "finance"],
+            "tasks": [
+                {"specialist": "career", "depends_on": ["finance"]},
+                {"specialist": "finance", "depends_on": ["career"]},
+            ],
+            "methodology": "vedic", "reasoning": "Cycle",
+        }))
+
+        result = build_orchestrator_graph().invoke({"user_query": "Question"})
+
+        mock_execute.assert_not_called()
+        self.assertIn("cycle", result["answer"])
+
+    @patch("astroweave.graphs.orchestrator.orchestrator_graph._get_chart_data", return_value=({"d1": {}}, []))
+    @patch("astroweave.graphs.orchestrator.orchestrator_graph.execute_specialist")
+    @patch("astroweave.graphs.orchestrator.orchestrator_graph.get_llm")
+    def test_full_run_produces_a_synthesized_answer(self, mock_get_llm, mock_execute, mock_chart):
         llm = MagicMock()
         llm.invoke.side_effect = [
             MagicMock(
@@ -64,9 +120,10 @@ class OrchestratorGraphTests(unittest.TestCase):
         classifier_messages = llm.invoke.call_args_list[0].args[0]
         self.assertIn("Birth details available: yes", classifier_messages[1].content)
 
+    @patch("astroweave.graphs.orchestrator.orchestrator_graph._get_chart_data", return_value=({"d1": {}}, []))
     @patch("astroweave.graphs.orchestrator.orchestrator_graph.execute_specialist")
     @patch("astroweave.graphs.orchestrator.orchestrator_graph.get_llm")
-    def test_executes_each_planned_task_before_synthesis(self, mock_get_llm, mock_execute):
+    def test_executes_each_planned_task_before_synthesis(self, mock_get_llm, mock_execute, mock_chart):
         llm = MagicMock()
         llm.invoke.side_effect = [
             MagicMock(content=json.dumps({
@@ -105,9 +162,10 @@ class OrchestratorGraphTests(unittest.TestCase):
         self.assertEqual(len(result["specialist_results"]), 2)
         self.assertEqual(result["answer"], "Combined answer.")
 
+    @patch("astroweave.graphs.orchestrator.orchestrator_graph._get_chart_data", return_value=({"d1": {}}, []))
     @patch("astroweave.graphs.orchestrator.orchestrator_graph.execute_specialist")
     @patch("astroweave.graphs.orchestrator.orchestrator_graph.get_llm")
-    def test_continues_queue_after_one_specialist_fails(self, mock_get_llm, mock_execute):
+    def test_continues_queue_after_one_specialist_fails(self, mock_get_llm, mock_execute, mock_chart):
         llm = MagicMock()
         llm.invoke.side_effect = [
             MagicMock(content=json.dumps({
@@ -180,16 +238,14 @@ class OrchestratorGraphTests(unittest.TestCase):
         self.assertEqual(result["specialists"], [])
         self.assertIn("No specialist", result["answer"])
 
+    @patch("astroweave.graphs.orchestrator.orchestrator_graph._get_chart_data", return_value=({"d1": {}}, []))
     @patch("astroweave.graphs.orchestrator.orchestrator_graph.execute_specialist")
     @patch("astroweave.graphs.orchestrator.orchestrator_graph.get_llm")
-    def test_loads_both_history_scopes_and_persists_final_turn(
-        self, mock_get_llm, mock_execute
+    def test_uses_history_supplied_by_connector(
+        self, mock_get_llm, mock_execute, mock_chart
     ):
-        store = MagicMock()
-        store.load_context_messages.return_value = (
-            [{"message_id": "old-1", "role": "user", "content": "Earlier context"}],
-            [{"message_id": "session-1", "role": "assistant", "content": "Recent answer"}],
-        )
+        conversation_history = [{"message_id": "old-1", "role": "user", "content": "Earlier context"}]
+        session_history = [{"message_id": "session-1", "role": "assistant", "content": "Recent answer"}]
         llm = MagicMock()
         llm.invoke.side_effect = [
             MagicMock(content=json.dumps({
@@ -211,33 +267,13 @@ class OrchestratorGraphTests(unittest.TestCase):
         }
 
         result = build_orchestrator_graph().invoke(
-            {"user_query": "What about timing?"},
-            context={
-                "conversation_id": "conversation-1",
-                "session_id": "session-2",
-                "username": "user@example.com",
-                "message_id": "message-2",
-                "conversation_store": store,
-                "request_claim_token": "claim-token",
-            },
+            {"user_query": "What about timing?", "messages": conversation_history + session_history},
         )
 
         classifier_content = llm.invoke.call_args_list[0].args[0][1].content
         self.assertIn("Earlier context", classifier_content)
         self.assertIn("Recent answer", classifier_content)
-        self.assertEqual(result["conversation_history"][0]["content"], "Earlier context")
-        self.assertEqual(result["session_history"][0]["content"], "Recent answer")
-        self.assertTrue(result["history_persisted"])
-        store.persist_turn.assert_called_once_with(
-            conversation_id="conversation-1",
-            session_id="session-2",
-            owner="user@example.com",
-            user_message_id="message-2",
-            user_content="What about timing?",
-            assistant_content="Follow-up response.",
-            request_fingerprint=None,
-            claim_token="claim-token",
-        )
+        self.assertEqual(result["answer"], "Follow-up response.")
 
 
 if __name__ == "__main__":

@@ -1,8 +1,8 @@
 # AstroWeave Project Documentation
 
 **Document status:** Living engineering reference<br>
-**Application generation:** v3 registry foundation on the v2 queue-driven orchestrator<br>
-**Last verified:** 2026-09-23<br>
+**Application generation:** connector-owned requests and dependency-stage orchestrator<br>
+**Last verified:** 2026-09-26<br>
 **Production readiness:** Prototype; not production-ready
 
 ## 1. Purpose of This Document
@@ -128,14 +128,15 @@ Stored fields:
 
 1. The signed-in user enters one question.
 2. The user chooses `Let the system decide`, `Vedic`, `KP`, or `Both`.
-3. The UI sends the question, identity labels, methodology, and stored birth
-   details to `POST /run`.
-4. The backend executes the v2 orchestrator.
+3. The UI sends the question and methodology to the connector's `POST /run`.
+4. The connector loads the authenticated profile and history, then invokes the
+  DAG orchestrator (or a configured direct specialist).
 5. The UI renders the final answer as Markdown.
 6. An always-available expander exposes the final orchestration state after a
   successful reading. It is not currently restricted to development mode.
 
-The UI creates UUID-based conversation and session IDs. Users can start,
+The connector issues UUID-based conversation and session IDs on the first run
+and returns them in the response. The UI retains these opaque IDs for follow-ups. Users can start,
 resume, and delete recent conversations, inspect the current IDs, and read the
 stored transcript. Conversation IDs identify durable threads; session IDs
 separate messages created during the current signed-in workspace session from
@@ -143,15 +144,17 @@ messages saved during prior sessions.
 
 ### 3.5 Multi-domain questions
 
-The classifier may select multiple specialists. Tasks are deduplicated while
-preserving order, then executed sequentially. Each execution checks for cached
-chart data. The first successful chart response is stored and reused; if chart
-retrieval fails, that task records an error and a later task retries retrieval.
+The classifier selects specialists and optional `tasks` with `depends_on` edges.
+The planner validates references, duplicates, and cycles, then computes
+topological stages. Specialists within a stage run concurrently; the next stage
+starts only after all tasks in the current stage finish. When no task edges are
+returned, all selected specialists are independent. The chart is fetched once
+and shared across stages. Only the requested upstream findings are handed to a
+dependent specialist; its own output is collected separately.
 
-If one specialist fails, its error is retained and the remaining queued tasks
-continue. If at least one result succeeds, synthesis uses the successful
-results. If no specialist result succeeds, the final answer is built from the
-recorded errors.
+An unrelated specialist continues after a failure. A dependent task is skipped
+when a required predecessor produced no result. If at least one result succeeds,
+synthesis uses successful findings; otherwise the answer reports errors.
 
 ### 3.6 Conversation history
 
@@ -164,7 +167,8 @@ AstroWeave implements two bounded context scopes over one durable transcript:
 
 Both limits are configurable. The complete transcript remains in SQLite even
 though only bounded windows are sent to LLMs. The current user question and
-final assistant answer are persisted atomically after synthesis. Reusing a
+final assistant answer are persisted atomically by the connector after synthesis
+(or a direct specialist run). Reusing a
 `message_id` and the same request content return the previously stored answer
 without rerunning the graph. Reusing the ID for different request data is a
 conflict.
@@ -179,10 +183,11 @@ implemented.
 | Component | Technology | Default address | Responsibility |
 |---|---|---|---|
 | Web UI | Streamlit | `127.0.0.1:8501` | Account flow and reading workspace |
-| Main API | FastAPI | `127.0.0.1:8000` | HTTP boundary and orchestrator invocation |
-| Orchestrator | LangGraph | In main API process | Routing, task queue, collection, synthesis |
+| Connector API | FastAPI | `127.0.0.1:8000` | Account access, IDs, history, persistence, app routing |
+| Orchestrator | LangGraph | In connector process | Routing, dependency stages, synthesis; no database access |
 | Agent registry | Python registry | In main API process | Registered agent definitions and lookup |
 | Specialist graph | LangGraph | In main API process | Domain-specific LLM analysis |
+| Optional specialist HTTP service | FastAPI | Operator-selected port | Independently deployable specialist graph, no database access |
 | Chart service | FastAPI + PyJHora | `127.0.0.1:8100` | Deterministic chart calculations |
 | User store | SQLite | `app/data/astroweave.db` | Local accounts and birth details |
 | LLM provider | Configurable | External | Classification, specialist analysis, synthesis |
@@ -193,14 +198,15 @@ implemented.
 ```mermaid
 flowchart LR
     User[User] --> UI[Streamlit UI]
-    UI --> DB[(SQLite users)]
     UI --> Geo[Nominatim geocoding]
-    UI --> API[FastAPI /run]
-    API --> Orchestrator[v2 LangGraph orchestrator]
+    UI --> API[FastAPI connector]
+    API --> DB[(SQLite accounts and conversations)]
+    API --> Orchestrator[LangGraph DAG orchestrator]
     Orchestrator --> LLM[Configured LLM provider]
     Orchestrator --> AgentRegistry[Specialist agent registry]
     AgentRegistry --> ToolRegistry[Per-agent tool registries]
-    Orchestrator --> Specialist[Specialist subgraph]
+    API -->|configured app ID| Specialist[Specialist subgraph or HTTP service]
+    Orchestrator --> Specialist
     Specialist --> AgentRegistry
     Specialist --> LLM
     Orchestrator --> ChartClient[Chart HTTP client]
@@ -232,57 +238,52 @@ flowchart LR
 sequenceDiagram
     actor User
     participant UI as Streamlit
-    participant API as Main API
-    participant O as v2 Orchestrator
+    participant API as Connector API
+    participant O as DAG Orchestrator
     participant C as Chart Service
     participant S as Specialist Graph
     participant L as LLM Provider
 
     User->>UI: Submit question and methodology
-    UI->>API: POST /run with saved birth details
-    API->>O: invoke(initial state, context)
-    O->>O: Resolve prior-session and current-session context
+    UI->>API: POST /run with query, optional IDs
+    API->>API: Authenticate, resolve IDs, claim request, load profile and history
+    API->>O: invoke(query, bounded history, birth details)
     O->>L: Classify request
-    L-->>O: Specialists, methodology, reasoning
-    O->>O: Plan and select first task
+    L-->>O: Specialists, dependencies, methodology
+    O->>O: Validate DAG and derive stages
     O->>C: POST /chart
     C-->>O: Full chart payload
-    loop For each selected specialist
-        O->>S: Invoke specialist subgraph
+    loop For each dependency stage
+      O->>S: Invoke ready specialists concurrently (local or HTTP)
         S->>L: Structured analysis request
         L-->>S: Analysis, conclusion, confidence
         S-->>O: Specialist result
-        O->>O: Collect result and select next task
+        O->>O: Collect results before next stage
     end
     O->>L: Synthesize collected findings
     L-->>O: Plain-text final answer
-    O->>O: Persist user question and assistant answer
     O-->>API: Final state
-    API-->>UI: Answer, state, empty execution trace
+    API->>API: Persist turn and release/complete claim
+    API-->>UI: Answer, issued IDs, state, empty execution trace
     UI-->>User: Render reading
 ```
 
-## 6. v2 Orchestrator
+## 6. Dependency-Stage Orchestrator
 
 ### 6.1 Graph topology
 
 ```mermaid
 flowchart TD
-    START((Start)) --> RCC[Resolve Conversation Context]
+    START((Start)) --> RCC[Validate Query]
     RCC --> V{Request valid?}
     V -->|No| SR[Synthesize Response]
     V -->|Yes| CR[Classify Request]
     CR --> PST[Plan Specialist Tasks]
-    PST --> SNT[Select Next Task]
-    SNT --> R{Task selected?}
+    PST --> R{Stages remain?}
     R -->|No| SR
-    R -->|Yes| RS[Run Specialist]
-    RS --> CSR[Collect Specialist Result]
-    CSR --> M{Tasks remain?}
-    M -->|Yes| SNT
-    M -->|No| SR
-    SR --> PCT[Persist Conversation Turn]
-    PCT --> END((End))
+    R -->|Yes| RS[Run Stage Concurrently]
+    RS --> R
+    SR --> END((End))
 ```
 
 ### 6.2 Node responsibilities
@@ -291,11 +292,8 @@ flowchart TD
 
 - Calls the current manager validation helper.
 - Rejects an empty query by recording an error.
-- Loads bounded prior-session conversation history and current-session history
-  from SQLite.
-- Verifies that existing conversation and session IDs belong to the supplied
-  username.
-- Combines both scopes into `state.messages` for downstream prompts.
+- Uses bounded history already supplied in `state.messages` by the connector;
+  it does not open the database.
 - Routes errors directly to response synthesis.
 
 #### `classify-request`
@@ -303,39 +301,32 @@ flowchart TD
 - Calls the orchestrator LLM with the routing prompt.
 - Tells the classifier whether birth details are available without sending the
   full birth-details payload.
-- Expects JSON containing `specialists`, `methodology`, and `reasoning`.
+- Expects JSON containing `specialists`, `tasks` (`specialist`, `depends_on`),
+  `methodology`, and `reasoning`. Legacy responses without `tasks` run selected
+  specialists as one independent stage.
 - Keeps only specialist names present in `SPECIALIST_REGISTRY` and logs ignored
-  names. This prevents model-generated agent names from entering the queue.
+  names. This prevents model-generated agent names from entering execution.
 - Honors a valid user-forced methodology over the model-selected methodology.
 - Defaults methodology to `vedic` when neither source provides one.
 - Appends routing reasoning to `state.plan`.
 
 #### `plan-specialist-tasks`
 
-- Converts selected specialists into an ordered task queue.
-- Removes duplicates while preserving first occurrence.
-- Initializes `pending_tasks`, `completed_tasks`, and `current_task`.
+- Removes duplicate selections, validates every dependency and rejects cycles.
+- Computes `task_stages` by repeatedly selecting tasks whose dependencies are
+  already in earlier stages; `pending_tasks` and `completed_tasks` track progress.
 - Records an error when no specialist was selected.
 
-#### `select-next-task`
+#### `run-stage`
 
-- Selects the first pending task without removing it.
-- Routes to `run-specialist` when a task exists.
-- Routes to `synthesize-response` when the queue is empty.
-
-#### `run-specialist`
-
-- Delegates one task to `execute_specialist()`.
-- Uses `current_task` as the specialist registry key.
-- Records an error if reached without a selected task.
-
-#### `collect-specialist-result`
-
-- Removes the current task from `pending_tasks`.
-- Appends it to `completed_tasks` even when that specialist recorded an error.
-- Clears `current_task`.
-- Updates `iteration_count` to the number of completed tasks.
-- Routes back to task selection while pending work remains.
+- Loads the full chart once (or uses cached state) and invokes ready specialists
+  with a bounded thread pool within each stage.
+- Supplies only required prior findings in `dependency_results`, separate from
+  the additive `specialist_results` output.
+- Skips dependents whose required predecessor produced no result. Independent
+  tasks can succeed even when another task fails.
+- Collects results and errors in deterministic task order and advances to the
+  next stage. `completed_tasks` includes skipped tasks.
 
 #### `synthesize-response`
 
@@ -346,21 +337,12 @@ flowchart TD
   exceeded.
 - Returns recorded errors as the answer when there are no successful results.
 
-#### `persist-conversation-turn`
+### 6.3 Stage semantics
 
-- Runs after synthesis on both success and recoverable-error paths.
-- Atomically stores the current user question and final user-visible answer.
-- Creates or updates the conversation and session records.
-- Uses the request `message_id` as an idempotency key.
-- Stores no hidden chain-of-thought, classifier reasoning, or specialist
-  analysis as transcript messages.
-
-### 6.3 Queue semantics
-
-- Execution is sequential, not parallel.
-- Specialist order follows classifier order after deduplication.
+- No dependency: same stage and concurrent execution. Dependency: later stage.
+- Stages run in order; tasks in one stage finish before the next starts.
 - A completed task means the task was attempted, not necessarily successful.
-- Errors use an additive state reducer and do not stop later tasks.
+- Errors use an additive state reducer and do not stop independent tasks.
 - Specialist results use an additive reducer and accumulate across tasks.
 - The birth chart is stored in state after first retrieval and reused.
 
@@ -504,27 +486,28 @@ shared state.
 | Field | Type | Current role |
 |---|---|---|
 | `user_query` | `str` | Original user question |
-| `messages` | additive list | Combined bounded history supplied to downstream nodes |
-| `session_history` | `list[Message]` | Bounded messages from the current session |
-| `conversation_history` | `list[Message]` | Bounded messages from prior sessions |
-| `history_persisted` | `bool` | Whether the final turn exists durably |
-| `history_replayed` | `bool` | Whether an idempotent API retry returned a stored answer |
+| `messages` | additive list | Connector-supplied bounded history |
+| `history_persisted` | `bool` | Connector response state: final turn exists durably |
+| `history_replayed` | `bool` | Connector response state: idempotent retry |
 | `plan` | `list[str]` | Classifier reasoning history |
 | `specialists` | `list[str]` | Selected domain specialists |
 | `methodology` | `str` | Normalized methodology |
+| `task_dependencies` | mapping | Planner-validated predecessor names |
+| `task_stages` | `list[list[str]]` | Remaining ready batches |
 | `pending_tasks` | `list[str]` | Specialists not yet attempted |
 | `completed_tasks` | `list[str]` | Specialists already attempted |
-| `current_task` | `str` | Specialist currently selected |
+| `current_task` | `str` | Selected task inside a specialist subgraph |
+| `dependency_results` | list | Required predecessor findings passed to a specialist |
 | `chart_data` | dictionary | Full chart-service response, reused across tasks |
 | `specialist_results` | additive list | Structured successful results |
 | `errors` | additive list | Recoverable and terminal run errors |
-| `iteration_count` | `int` | Number of collected task attempts |
+| `iteration_count` | `int` | Number of completed or skipped tasks |
 | `answer` | `str` | Final user-facing response |
 | `tool_results` | additive list | Reserved for future tools |
 | `stage_results` | latest five | Reserved bounded stage outputs |
 | `specialist_analysis` | `str` | Latest specialist analysis |
 | `evaluation` | `str` | Latest specialist confidence |
-| `needs_replanning` | `bool` | Reserved; not used by v2 orchestrator |
+| `needs_replanning` | `bool` | Reserved; not used by staged orchestrator |
 | `is_sufficient` | `bool` | Used by specialist evaluator |
 
 The `specialist_results` and `errors` reducers use list addition. Replacing
@@ -536,17 +519,15 @@ Context is request-scoped and is not treated as mutable graph state.
 
 | Field | Current use |
 |---|---|
-| `conversation_id` | Durable thread identity and history lookup key |
-| `session_id` | Current-session history partition and persistence key |
-| `username` | Authenticated owner identity; must match bearer-token subject |
-| `message_id` | User-turn idempotency key |
+| `conversation_id` | Connector-issued thread ID, available to downstream services |
+| `session_id` | Connector-issued session ID |
+| `username` | Authenticated owner identity |
 | `methodology` | User-forced methodology input |
 | `birth_details` | Chart-service request input |
-| `conversation_store` | Request-injected SQLite repository |
 
-The username is the ownership partition. Protected endpoints derive the
-authenticated identity from a signed bearer token and reject a `/run` body
-whose username differs from the token subject.
+Only the connector owns history loading, request claims, and persistence.
+The username is the ownership partition. A supplied `/run` username must
+match the signed bearer-token subject.
 
 ## 9. Main API Contract
 
@@ -564,50 +545,63 @@ Response:
 This confirms process availability only. It does not test the LLM provider,
 chart service, SQLite database, or geocoder.
 
-### 9.2 `POST /run`
+### 9.2 Account endpoints
+
+- `POST /auth/register`: `{ "email", "name", "password", "birth_details" }`;
+  birth details include date, time, coordinates, UTC offset, optional place name
+  and `date_known`. Returns `{ "user", "token" }` (HTTP `422` for invalid data
+  or duplicate account). The connector performs the SQLite insert and scrypt
+  password hashing.
+- `POST /auth/sign-in`: `{ "email", "password" }`; returns the same user/token
+  shape, or HTTP `401` for invalid credentials.
+- `GET /auth/me`: authenticated profile lookup. The UI keeps the token in
+  session state and sends it as `Authorization: Bearer <token>`.
+
+The UI still geocodes a birth place before registration; it never opens SQLite.
+Production deployments should move geocoding and account identity to dedicated
+services as appropriate.
+
+### 9.3 `POST /run`
 
 Request body:
 
 ```json
 {
   "query": "How will a promotion affect my finances?",
-  "conversation_id": "conversation-1",
-  "session_id": "session-1",
   "message_id": "550e8400-e29b-41d4-a716-446655440000",
-  "username": "user@example.com",
-  "methodology": "Let the system decide",
-  "birth_details": {
-    "date": "1990-01-01",
-    "time": "10:00:00",
-    "latitude": 17.385,
-    "longitude": 78.4867,
-    "utc_offset_hours": 5.5,
-    "place_name": "Hyderabad, India"
-  }
+  "methodology": "Let the system decide"
 }
 ```
 
 Validation rules:
 
-- `query`, `conversation_id`, `session_id`, and `username` are required and
-  must contain at least one character.
+- `query` and bearer token are required. `conversation_id` and `session_id`
+  are optional: the connector creates missing UUIDs and returns both values.
+  Send them on subsequent turns to keep the same conversation and session;
+  omit `session_id` when resuming a prior conversation in a new session.
+- `username`, if supplied for older clients, must equal the token subject.
 - `methodology` defaults to `Let the system decide`.
-- Latitude must be between `-90` and `90`.
-- Longitude must be between `-180` and `180`.
-- Birth details are optional at the HTTP schema but required for specialist
-  chart execution.
-- `message_id` is optional; the API generates a UUID when omitted.
-- Date and time formatting is described but not regex-validated by the main
-  API; the chart service parses them.
+- Birth details come from the connector's account record, not the request body.
+  The legacy `birth_details` field is accepted but ignored by execution.
+- `message_id` defaults to a UUID; supply the same ID and payload for reliable
+  retry. With omitted IDs, the connector recovers the original IDs by message ID.
+- Optional `app_id` selects a specialist from the server-side JSON mapping
+  `ASTROWEAVE_APP_ROUTES`, e.g. `{"career-app":"career"}`. Unknown app IDs
+  return `403`. Without an app ID, the DAG orchestrator runs as usual.
+- Direct routing skips classifier, planner, and orchestrator synthesis. Its
+  answer is the specialist conclusion; both paths persist the same transcript.
 
 Abridged successful response:
 
 ```json
 {
   "answer": "Synthesized response",
+  "conversation_id": "server-issued-conversation-id",
+  "session_id": "server-issued-session-id",
   "state": {
     "specialists": ["career", "finance"],
     "pending_tasks": [],
+    "task_stages": [],
     "completed_tasks": ["career", "finance"],
     "specialist_results": [
       {
@@ -629,8 +623,8 @@ Important current behavior:
 - `execution_trace` is always an empty list.
 - Duplicate requests with the same owned conversation and `message_id` return
   the stored assistant answer without rerunning the graph.
-- The idempotency key is bound to a SHA-256 fingerprint of conversation,
-  session, query, methodology, and birth details. Different data returns `409`.
+- The idempotency key is bound to a SHA-256 fingerprint of request fields
+  (excluding `message_id` and username). Different data returns `409`.
 - A durable pending claim prevents concurrent processes from executing the same
   message ID; concurrent duplicates return `409` while work is in progress.
 - Claims abandoned by a crashed process can be reclaimed after a configurable
@@ -638,13 +632,27 @@ Important current behavior:
 - Each lease has a unique fencing token; stale workers cannot release or
   complete a newer worker's reclaimed claim.
 - Validation failures return FastAPI/Pydantic `422` responses.
-- Unhandled graph failures are mapped to `502 Bad Gateway` and include the
+- Unhandled graph or storage failures are mapped to `502 Bad Gateway` and include the
   exception text in `detail`.
 - Recoverable graph errors may still return HTTP `200` with error text in state
   and possibly in the answer.
 - `/run` and conversation endpoints require a signed bearer token.
 
-### 9.3 Conversation endpoints
+### 9.4 Specialist HTTP service
+
+Run `astroweave.specialist_service:app` in a separate process per specialist
+(or one shared specialist process). The connector/orchestrator dispatcher uses
+`ASTROWEAVE_SPECIALIST_URLS` to choose remote instead of in-process execution:
+`{"career":"http://127.0.0.1:8200"}`. A missing entry uses the local graph.
+The dispatcher posts to `<base>/specialists/{name}/run` with a signed bearer
+token, user query, prior messages, methodology, shared `chart_data`, and
+`dependency_results`. The service validates the specialist against the
+registry and returns `specialist_results` and `errors`; it has no database
+dependency. Its HTTP `401`/`404` responses become task errors in the dispatcher.
+All processes must share `ASTROWEAVE_AUTH_SECRET`; use private service networking
+and TLS in deployment. HTTP is the first transport; A2A is not implemented.
+
+### 9.5 Conversation endpoints
 
 `GET /conversations?limit=<1..100>` lists active conversations owned by the
 authenticated bearer-token subject, newest first.
@@ -825,26 +833,28 @@ with `ASTROWEAVE_USERS_DB`.
 
 ### 12.3 Current authentication boundary
 
-After local SQLite password authentication, Streamlit creates an HMAC-SHA256
-bearer token containing the user's email and a 12-hour expiration. The API
-verifies the signature and expiry and uses the token subject for conversation
-ownership. `/run` additionally requires the body username to match that
-subject.
+The connector authenticates against SQLite and issues an HMAC-SHA256 bearer
+token containing the user's email and a 12-hour expiration. The API verifies
+the signature and expiry, loads the account profile, and uses the token subject
+for conversation ownership. A supplied `/run` username must match that subject.
+The specialist HTTP service verifies a connector-signed bearer token.
 
-Both processes must share `ASTROWEAVE_AUTH_SECRET`. Development falls back to
+Connector and specialist processes must share `ASTROWEAVE_AUTH_SECRET`. Development falls back to
 a known local-only secret with a warning; production mode refuses to sign or
 verify without an explicit secret. Tokens are stateless and cannot currently
 be individually revoked before expiry.
 
 ### 12.4 Conversation persistence
 
-Conversation records share the existing SQLite database by default. The store
-creates three tables:
+Conversation records share the existing SQLite database by default. The connector
+store creates four tables:
 
 - `conversations`: globally unique ID, owner, title, timestamps, archive field
 - `conversation_sessions`: globally unique ID, owner, lifecycle timestamps
 - `conversation_messages`: user/assistant content, session, owner, and ordered
   sequence number
+- `conversation_requests`: message ID, claim token, payload fingerprint, status,
+  and replayable answer
 
 Writes use `BEGIN IMMEDIATE` and store each user/assistant turn in one
 transaction. Foreign keys cascade message deletion with conversations. WAL,
@@ -950,15 +960,15 @@ Streamlit and the chart service currently initialize logging directly at
 ### 15.2 Logged orchestration events
 
 - API request metadata and query length
-- Conversation-context resolution and separate scope counts
+- Connector history loading and request claims
 - Every conditional route destination
 - Selected specialists and methodology
-- Task queue creation and selection
+- Dependency-stage creation and completion
 - Chart retrieval and reuse
 - Specialist start, completion, result count, and error count
 - LLM JSON attempt, content length, and finish reason
 - Classifier reasoning and specialist analysis
-- Collector progress and synthesis result count
+- Stage progress and synthesis result count
 
 ### 15.3 Current observability gaps
 
@@ -976,23 +986,25 @@ Streamlit and the chart service currently initialize logging directly at
 | Test module | Coverage focus |
 |---|---|
 | `test_auth.py` | SQLite registration, password hashing, authentication |
-| `test_dispatcher.py` | Chart retrieval, specialist invocation, error propagation |
+| `test_dispatcher.py` | Chart retrieval, local/HTTP specialist invocation, error propagation |
 | `test_llm_config.py` | Completion-token defaults and precedence |
-| `test_orchestrator_graph.py` | Full graph, task order, history, persistence, partial failure |
+| `test_orchestrator_graph.py` | Concurrent stages, dependency handoff, cycles, partial failure |
 | `test_specialist_graph.py` | Specialist output, unknown specialist, JSON retry |
 | `test_agent_registry.py` | Built-in agents, per-agent tool ownership, duplicate rejection |
 | `test_tools.py` | Decorator metadata, invocation contract, tool lookup, duplicate rejection |
-| `test_api.py` | Health, run response, validation, `502` mapping |
+| `test_api.py` | Registration, DAG/direct routes, persistence/replay, specialist auth |
 | `test_conversation_store.py` | Transactions, scope separation, ownership, replay, deletion |
 | `test_security_tokens.py` | Signing, expiry, tampering, and client parity |
 | `test_geocoding.py` | Indian place match, no-result, provider failure |
 
-The verified suite contains 61 passing tests as of this document's last
-verification date.
+The connector integration test uses temporary SQLite stores and mocks the
+external chart and LLM boundaries.
 
 ### 16.2 Test boundaries
 
-- Unit and API integration tests mock LLM and orchestrator dependencies.
+- Connector integration tests run the real DAG and specialist graph with mocked
+  LLM and chart boundaries. HTTP transport is covered with a mocked remote
+  response; a deployed multi-process HTTP run is not automated.
 - The normal test suite does not require provider keys or the chart service.
 - There are no automated chart-service tests in the current repository.
 - There are no browser-level Streamlit tests.
@@ -1006,9 +1018,9 @@ Real local end-to-end verification has exercised:
 - Real Groq classification and synthesis
 - Real PyJHora chart calculation
 - One-specialist career flow
-- Two-specialist career and finance queue flow
+- Two-specialist career and finance flow (historical manual verification)
 - Chart reuse between specialists
-- Queue completion with no errors
+- Completion with no errors
 
 The real two-specialist verification completed with two high-confidence
 results, one chart request, no state errors, and a synthesized answer.
@@ -1046,6 +1058,7 @@ export ASTROWEAVE_LLM_PROVIDER=groq
 export ASTROWEAVE_LLM_MODEL=openai/gpt-oss-120b
 export ASTROWEAVE_LLM_MAX_TOKENS=4096
 export GROQ_API_KEY=replace-with-local-secret
+export ASTROWEAVE_APP_ROUTES='{"career-app":"career"}'
 ```
 
 ### 17.2 Chart-service environment
@@ -1075,7 +1088,27 @@ PYTHONPATH=src .venv/bin/uvicorn astroweave.api.main:app \
   --server.headless true --server.address 127.0.0.1 --server.port 8501
 ```
 
-### 17.5 Health checks
+The UI uses `ASTROWEAVE_API_URL` (default `http://127.0.0.1:8000`) for
+registration and sign-in before the sidebar is available. The sidebar API URL
+setting applies after sign-in.
+
+### 17.5 Optional Specialist Process
+
+From the repository root, start a specialist HTTP process with the same LLM
+configuration and `ASTROWEAVE_AUTH_SECRET` as the connector:
+
+```bash
+PYTHONPATH=src .venv/bin/uvicorn astroweave.specialist_service:app \
+  --host 127.0.0.1 --port 8200
+```
+
+Set `ASTROWEAVE_SPECIALIST_URLS='{"career":"http://127.0.0.1:8200"}'`
+on the connector. Other specialists continue to run locally. The optional
+service authenticates requests but does not access SQLite or calculate charts.
+One service per specialist is an operator deployment choice; each instance
+exposes the same registry routes.
+
+### 17.6 Health Checks
 
 ```bash
 curl http://127.0.0.1:8100/health
@@ -1083,7 +1116,7 @@ curl http://127.0.0.1:8000/health
 curl http://127.0.0.1:8501/
 ```
 
-### 17.6 Tests
+### 17.7 Tests
 
 ```bash
 PYTHONPATH=src .venv/bin/python -m pytest -q
@@ -1101,6 +1134,9 @@ PYTHONPATH=src .venv/bin/python -m pytest -q
 | `ASTROWEAVE_LLM_MAX_TOKENS` | `4096` | Global completion budget |
 | `ASTROWEAVE_CONTEXT_CHAR_LIMIT` | disabled | Optional handoff limit |
 | `ASTROWEAVE_CHART_SERVICE_URL` | `http://127.0.0.1:8100` | Chart API base URL |
+| `ASTROWEAVE_API_URL` | `http://127.0.0.1:8000` | UI auth and initial connector URL |
+| `ASTROWEAVE_APP_ROUTES` | `{}` | JSON app ID to specialist registry name mapping |
+| `ASTROWEAVE_SPECIALIST_URLS` | `{}` | JSON specialist name to remote service base URL mapping |
 | `ASTROWEAVE_USERS_DB` | `app/data/astroweave.db` | SQLite database path |
 | `ASTROWEAVE_CONVERSATIONS_DB` | users DB path | Conversation DB override |
 | `ASTROWEAVE_SESSION_HISTORY_LIMIT` | `12` | Current-session message window |
@@ -1135,8 +1171,8 @@ must address:
 - PyJHora/AGPL deployment and distribution review
 
 The module-level compiled orchestrator and cached specialist graph are reused
-within one process. The SQLite connection is cached by Streamlit with
-`check_same_thread=false`. These choices need concurrency and deployment review
+within one process. The connector opens short-lived account SQLite connections.
+These choices need concurrency and deployment review
 before multi-worker production use.
 
 ## 20. Implemented, Placeholder, and Planned Matrix
@@ -1147,12 +1183,15 @@ before multi-worker production use.
 | India-only geocoding | Implemented | Nominatim, fixed IST offset |
 | Read-only birth profile | Implemented | No edit workflow |
 | Main API health and run endpoints | Implemented | Signed bearer token required |
-| v2 queue-driven orchestrator | Implemented | Sequential tasks |
+| DAG staged orchestrator | Implemented | Parallel independent tasks; dependents run later |
+| Connector-owned IDs/account/history | Implemented | UI does not open SQLite |
+| App ID direct specialist routing | Implemented | Server-side mapping; bypasses planner/synthesis |
+| Optional specialist HTTP service | Implemented | Per-specialist URL; A2A not implemented |
 | Career, finance, love, sports prompts | Implemented | Shared graph |
 | Full chart-service integration | Implemented | PyJHora HTTP service |
 | Configurable LLM providers/models | Implemented | Env hierarchy |
 | Malformed JSON retry | Implemented | One retry |
-| Partial specialist failure | Implemented | Remaining queue continues |
+| Partial specialist failure | Implemented | Independent tasks continue; dependents skip |
 | Orchestrator agent registry | Implemented | Registered agents are the routing source of truth |
 | Per-agent tool registry | Implemented | Each agent owns an independent registry |
 | Base tool response and metadata models | Implemented | Pydantic v2 contracts |

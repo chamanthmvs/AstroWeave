@@ -1,13 +1,13 @@
 from __future__ import annotations
 
 import logging
+import os
 from datetime import date
 from uuid import uuid4
 
 import httpx
 import streamlit as st
 
-import auth
 from geocoding import (
     INDIA_UTC_OFFSET_HOURS,
     GeocodingServiceError,
@@ -106,13 +106,10 @@ st.markdown(
 )
 
 
-@st.cache_resource
-def get_db_connection():
-    return auth.get_connection(check_same_thread=False)
-
-
 if "user" not in st.session_state:
     st.session_state.user = None
+
+api_base = os.environ.get("ASTROWEAVE_API_URL", "http://127.0.0.1:8000")
 
 
 def initials(name: str) -> str:
@@ -126,7 +123,6 @@ def render_auth() -> None:
     st.title("Your questions, read from every angle.")
     st.markdown('<p class="auth-note">Sign in to continue your astrology workspace, or register once to begin a new reading.</p>', unsafe_allow_html=True)
 
-    connection = get_db_connection()
     mode = st.radio("Account access", ["Sign in", "Create account"], horizontal=True, label_visibility="collapsed")
 
     if mode == "Sign in":
@@ -139,11 +135,17 @@ def render_auth() -> None:
             if not normalized_email or not password:
                 st.error("Enter your email and password to continue.")
             else:
-                authenticated_user = auth.authenticate_user(connection, normalized_email, password)
-                if authenticated_user is None:
-                    st.error("That email and password combination was not found.")
+                try:
+                    response = httpx.post(
+                        f"{api_base}/auth/sign-in",
+                        json={"email": normalized_email, "password": password}, timeout=10,
+                    )
+                    response.raise_for_status()
+                except (httpx.RequestError, httpx.HTTPStatusError):
+                    st.error("Sign-in failed. Check your credentials and API connection.")
                 else:
-                    st.session_state.user = authenticated_user
+                    st.session_state.user = response.json()["user"]
+                    st.session_state.token = response.json()["token"]
                     st.rerun()
     else:
         st.markdown(
@@ -194,12 +196,10 @@ def render_auth() -> None:
                         )
                     else:
                         try:
-                            created_user = auth.create_user(
-                                connection,
-                                normalized_email,
-                                name.strip(),
-                                password,
-                                {
+                            response = httpx.post(
+                                f"{api_base}/auth/register",
+                                json={"email": normalized_email, "name": name.strip(),
+                                      "password": password, "birth_details": {
                                     "date": birth_date.isoformat() if not date_unknown else "",
                                     "time": birth_time.strftime("%H:%M:%S"),
                                     "place_name": place_name.strip(),
@@ -207,12 +207,14 @@ def render_auth() -> None:
                                     "longitude": geocoded["longitude"],
                                     "utc_offset_hours": INDIA_UTC_OFFSET_HOURS,
                                     "date_known": not date_unknown,
-                                },
+                                }}, timeout=10,
                             )
-                        except ValueError as error:
-                            st.error(str(error))
+                            response.raise_for_status()
+                        except (httpx.RequestError, httpx.HTTPStatusError) as error:
+                            st.error(f"Registration failed: {error}")
                         else:
-                            st.session_state.user = created_user
+                            st.session_state.user = response.json()["user"]
+                            st.session_state.token = response.json()["token"]
                             st.rerun()
 
     st.markdown('</div>', unsafe_allow_html=True)
@@ -225,11 +227,7 @@ if st.session_state.user is None:
 
 user = st.session_state.user
 birth_details = user["birth_details"]
-api_headers = {"Authorization": f"Bearer {auth.create_api_token(user['email'])}"}
-if "conversation_id" not in st.session_state:
-    st.session_state.conversation_id = str(uuid4())
-if "session_id" not in st.session_state:
-    st.session_state.session_id = str(uuid4())
+api_headers = {"Authorization": f"Bearer {st.session_state.token}"}
 
 with st.sidebar:
     st.markdown('<div class="brand"><span class="brand-mark" aria-hidden="true"></span> AstroWeave</div>', unsafe_allow_html=True)
@@ -239,9 +237,10 @@ with st.sidebar:
     )
     st.markdown('<div class="workspace-label">Your workspace</div>', unsafe_allow_html=True)
     st.markdown('<div class="side-meta"><div class="meta-item"><span class="meta-label">Method</span><span class="meta-value">Vedic + KP</span></div><div class="meta-item"><span class="meta-label">Readings</span><span class="meta-value">01</span></div></div>', unsafe_allow_html=True)
-    api_url = st.text_input("API URL", value="http://127.0.0.1:8000")
+    api_url = st.text_input("API URL", value=api_base)
     if st.button("New conversation", use_container_width=True):
-        st.session_state.conversation_id = str(uuid4())
+        st.session_state.pop("conversation_id", None)
+        st.session_state.pop("session_id", None)
         st.session_state.pop("pending_message_id", None)
         st.rerun()
     try:
@@ -266,9 +265,10 @@ with st.sidebar:
                     title,
                     key=f"resume-{conversation_id_value}",
                     use_container_width=True,
-                    disabled=conversation_id_value == st.session_state.conversation_id,
+                    disabled=conversation_id_value == st.session_state.get("conversation_id"),
                 ):
                     st.session_state.conversation_id = conversation_id_value
+                    st.session_state.pop("session_id", None)
                     st.session_state.pop("pending_message_id", None)
                     st.rerun()
             with delete_column:
@@ -288,14 +288,15 @@ with st.sidebar:
                         st.error("The conversation could not be deleted.")
                     else:
                         if delete_response.is_success:
-                            if conversation_id_value == st.session_state.conversation_id:
-                                st.session_state.conversation_id = str(uuid4())
+                            if conversation_id_value == st.session_state.get("conversation_id"):
+                                st.session_state.pop("conversation_id", None)
+                                st.session_state.pop("session_id", None)
                             st.session_state.pop("pending_message_id", None)
                             st.rerun()
                         st.error("The conversation could not be deleted.")
     with st.expander("Session details"):
-        st.caption(f"Conversation ID: {st.session_state.conversation_id}")
-        st.caption(f"Session ID: {st.session_state.session_id}")
+        st.caption(f"Conversation ID: {st.session_state.get('conversation_id') or 'Created on first reading'}")
+        st.caption(f"Session ID: {st.session_state.get('session_id') or 'Created on first reading'}")
     with st.expander("Birth details", expanded=True):
         st.caption("Set once at registration - not editable here. Updating birth details is a separate workflow.")
         if not birth_details.get("date_known", True):
@@ -313,24 +314,25 @@ with st.sidebar:
         )
     if st.button("Sign out", use_container_width=True):
         st.session_state.user = None
+        st.session_state.pop("token", None)
         st.session_state.pop("conversation_id", None)
         st.session_state.pop("session_id", None)
         st.session_state.pop("pending_message_id", None)
         st.rerun()
 
-conversation_id = st.session_state.conversation_id
-session_id = st.session_state.session_id
-try:
-    messages_response = httpx.get(
-        f"{api_url.rstrip('/')}/conversations/{conversation_id}/messages",
-        params={"limit": 50},
-        headers=api_headers,
-        timeout=5,
-    )
-    messages_response.raise_for_status()
-    visible_messages = messages_response.json().get("messages", [])
-except (httpx.RequestError, httpx.HTTPStatusError, ValueError):
-    visible_messages = []
+conversation_id = st.session_state.get("conversation_id")
+session_id = st.session_state.get("session_id")
+visible_messages = []
+if conversation_id:
+    try:
+        messages_response = httpx.get(
+            f"{api_url.rstrip('/')}/conversations/{conversation_id}/messages",
+            params={"limit": 50}, headers=api_headers, timeout=5,
+        )
+        messages_response.raise_for_status()
+        visible_messages = messages_response.json().get("messages", [])
+    except (httpx.RequestError, httpx.HTTPStatusError, ValueError):
+        pass
 
 st.markdown('<div class="eyebrow">Personal astrology workspace</div>', unsafe_allow_html=True)
 st.title("Make room for the answer.")
@@ -368,10 +370,8 @@ if submitted:
             "query": query,
             "conversation_id": conversation_id,
             "session_id": session_id,
-            "username": user["email"],
             "methodology": methodology,
             "message_id": st.session_state.pending_message_id,
-            "birth_details": birth_details,
         }
         logger.info(
             "Submitting reading request username=%s conversation_id=%s session_id=%s methodology=%s",
@@ -396,6 +396,8 @@ if submitted:
             if response.is_success:
                 st.session_state.pop("pending_message_id", None)
                 body = response.json()
+                st.session_state.conversation_id = body["conversation_id"]
+                st.session_state.session_id = body["session_id"]
                 st.markdown('<div class="workspace-label">Your reading</div>', unsafe_allow_html=True)
                 with st.container(border=True):
                     st.markdown('<div class="panel-title"><h3>The reading</h3><span class="status">● Complete</span></div>', unsafe_allow_html=True)

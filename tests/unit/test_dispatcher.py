@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, patch
 import httpx
 
 from astroweave.orchestration.dispatcher.dispatcher import run_dispatcher
+from astroweave.orchestration.dispatcher.dispatcher import execute_specialist
 
 
 def _runtime(context: dict) -> MagicMock:
@@ -13,6 +14,24 @@ def _runtime(context: dict) -> MagicMock:
 
 
 class DispatcherTests(unittest.TestCase):
+    @patch.dict("os.environ", {"ASTROWEAVE_SPECIALIST_URLS": '{"finance":"http://127.0.0.1:8200"}'})
+    @patch("astroweave.orchestration.dispatcher.dispatcher.httpx.post")
+    def test_remote_specialist_receives_dependency_findings(self, mock_post):
+        mock_post.return_value.json.return_value = {"specialist_results": [{
+            "specialist": "finance", "analysis": "a", "conclusion": "c", "confidence": "high",
+        }]}
+        result = execute_specialist(
+            {"chart_data": {"d1": {}}, "user_query": "q", "dependency_results": [{
+                "specialist": "career", "analysis": "prior", "conclusion": "prior", "confidence": "high",
+            }]},
+            _runtime({"username": "demo-user"}), "finance",
+        )
+
+        self.assertEqual(len(result["specialist_results"]), 1)
+        self.assertEqual(mock_post.call_args.args[0], "http://127.0.0.1:8200/specialists/finance/run")
+        self.assertEqual(mock_post.call_args.kwargs["json"]["dependency_results"][0]["specialist"], "career")
+        self.assertTrue(mock_post.call_args.kwargs["headers"]["Authorization"].startswith("Bearer "))
+
     @patch("astroweave.orchestration.dispatcher.dispatcher._get_specialist_graph")
     @patch("astroweave.orchestration.dispatcher.dispatcher.get_birth_chart")
     def test_fans_out_to_each_specialist(self, mock_get_birth_chart, mock_get_graph):

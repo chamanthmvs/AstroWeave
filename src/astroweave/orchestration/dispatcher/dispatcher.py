@@ -15,6 +15,7 @@ guard against oversized hand-offs (disabled by default).
 from __future__ import annotations
 
 import json
+import os
 
 import httpx
 from langgraph.runtime import Runtime
@@ -22,6 +23,7 @@ from langgraph.runtime import Runtime
 from astroweave.common.config import get_logger
 from astroweave.common.context import Context
 from astroweave.common.llm import ContextLimitExceededError, enforce_context_limit
+from astroweave.common.security import create_user_token
 from astroweave.common.state import State
 from astroweave.common.tools.chart_client import get_birth_chart
 from astroweave.graphs.specialist.specialist_graph import build_specialist_graph
@@ -75,12 +77,26 @@ def execute_specialist(
         "current_task": specialist_name,
         "methodology": methodology,
         "chart_data": chart_data,
+        "dependency_results": state.get("dependency_results") or [],
     }
     try:
         enforce_context_limit(
             f"dispatcher->{specialist_name}", json.dumps(handoff, default=str)
         )
-        result = _get_specialist_graph().invoke(handoff, context=runtime.context)
+        urls = json.loads(os.environ.get("ASTROWEAVE_SPECIALIST_URLS", "{}"))
+        if not isinstance(urls, dict):
+            raise ValueError("ASTROWEAVE_SPECIALIST_URLS must be an object")
+        if specialist_name in urls:
+            response = httpx.post(
+                f"{urls[specialist_name].rstrip('/')}/specialists/{specialist_name}/run",
+                json=handoff,
+                headers={"Authorization": f"Bearer {create_user_token((runtime.context or {})['username'])}"},
+                timeout=90,
+            )
+            response.raise_for_status()
+            result = response.json()
+        else:
+            result = _get_specialist_graph().invoke(handoff, context=runtime.context)
     except ContextLimitExceededError as error:
         logger.warning("specialist '%s' skipped: %s", specialist_name, error)
         return {"chart_data": chart_data, "errors": [str(error)]}

@@ -67,12 +67,12 @@ For a question such as *“Will I get a new job this year?”*, AstroWeave can i
 
 **This project is still in progress and is not production-ready.**
 
-The v2 flow is wired end-to-end: a Streamlit question reaches the FastAPI
-backend, an LLM-driven request classifier selects domain specialists, the task
-planner creates a queue, and each specialist subgraph runs before response
-synthesis produces one answer. Conversation-context resolution is now an
-implemented SQLite-backed stage with separate session and prior-conversation
-windows. The knowledge/RAG layer, rolling summaries, cross-conversation memory,
+The connector owns accounts, conversation IDs, history, and persistence. A
+Streamlit question reaches `/run`, where the orchestrator plans dependency
+stages: independent specialists run concurrently; dependent specialists wait
+for prior findings. A configured app ID can route directly to a specialist,
+skipping planning and synthesis. Specialists run locally by default or through
+an optional authenticated HTTP service. The knowledge/RAG layer, rolling summaries, cross-conversation memory,
 and methodology-specific Vedic/KP logic are not implemented yet.
 
 The fuller implementation snapshot and roadmap are published in the
@@ -99,6 +99,14 @@ export GROQ_API_KEY=your_key_here
 PYTHONPATH=src uvicorn astroweave.api.main:app --reload
 streamlit run app/streamlit_app.py
 ```
+
+The connector creates conversation/session IDs on the first request and returns
+them for follow-ups. For an optional direct career route, set
+`ASTROWEAVE_APP_ROUTES='{"career-app":"career"}'` on the connector and send
+`"app_id":"career-app"` to `/run`. To deploy career separately, run
+`PYTHONPATH=src uvicorn astroweave.specialist_service:app --port 8200` with a
+shared `ASTROWEAVE_AUTH_SECRET`, and configure the connector with
+`ASTROWEAVE_SPECIALIST_URLS='{"career":"http://127.0.0.1:8200"}'`.
 
 The `/run` endpoint also requires the chart service:
 
