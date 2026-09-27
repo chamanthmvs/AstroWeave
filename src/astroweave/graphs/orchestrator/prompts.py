@@ -29,6 +29,7 @@ Given the user's question and any known birth details, respond with a JSON
 object describing the routing decision:
 {
   "specialists": ["<one or more of career|finance|love|sports>"],
+  "tasks": [{"specialist": "<selected specialist>", "depends_on": []}],
   "methodology": "<vedic|kp|both>",
   "reasoning": "<one or two sentence justification>"
 }
@@ -36,6 +37,9 @@ object describing the routing decision:
 Rules:
 - Pick the smallest set of specialists that can answer the question.
 - If the question spans multiple domains, list all of them.
+- Include exactly one task for each selected specialist. Use depends_on only
+  when that task needs another selected specialist's finding; otherwise use [].
+- Never create a dependency cycle.
 - Do not invent birth details; if required data is missing, say so in
   "reasoning" instead of guessing.
 - Never answer the astrology question yourself here; only route it.

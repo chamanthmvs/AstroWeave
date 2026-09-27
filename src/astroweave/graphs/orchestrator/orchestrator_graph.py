@@ -1,4 +1,5 @@
 from collections.abc import Mapping
+from concurrent.futures import ThreadPoolExecutor
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langgraph.graph import END, START, StateGraph
@@ -16,7 +17,7 @@ from astroweave.common.llm import (
 )
 from astroweave.common.state import State
 from astroweave.methodologies import normalize_methodology
-from astroweave.orchestration.dispatcher.dispatcher import execute_specialist
+from astroweave.orchestration.dispatcher.dispatcher import _get_chart_data, execute_specialist
 from astroweave.orchestration.manager.manager import run_manager
 
 from .prompts import ORCHESTRATOR_ROUTING_PROMPT, ORCHESTRATOR_SYNTHESIS_PROMPT
@@ -27,44 +28,9 @@ logger = get_logger(__name__)
 def _resolve_conversation_context(
     state: State, runtime: Runtime[Context]
 ) -> State:
-    logger.info("resolve-conversation-context: validating query and loading history")
+    logger.info("resolve-conversation-context: validating query")
     manager_update = run_manager(state)
-    if manager_update.get("errors"):
-        return manager_update
-
-    context = runtime.context or {}
-    store = context.get("conversation_store")
-    if store is None:
-        logger.warning("conversation store unavailable; continuing without history")
-        return manager_update
-
-    conversation_id = context.get("conversation_id", "")
-    session_id = context.get("session_id", "")
-    owner = context.get("username", "")
-    if not conversation_id or not session_id or not owner:
-        raise ValueError(
-            "conversation_id, session_id, and username are required for history"
-        )
-
-    conversation_history, session_history = store.load_context_messages(
-        conversation_id=conversation_id,
-        session_id=session_id,
-        owner=owner,
-    )
-    messages = conversation_history + session_history
-    logger.info(
-        "resolved history conversation_id=%s session_id=%s prior_messages=%d session_messages=%d",
-        conversation_id,
-        session_id,
-        len(conversation_history),
-        len(session_history),
-    )
-    return {
-        **manager_update,
-        "conversation_history": conversation_history,
-        "session_history": session_history,
-        "messages": messages,
-    }
+    return manager_update
 
 
 def _classify_request(state: State, runtime: Runtime[Context]) -> State:
@@ -118,7 +84,12 @@ def _classify_request(state: State, runtime: Runtime[Context]) -> State:
         methodology,
     )
 
-    return {"specialists": specialists, "methodology": methodology, "plan": plan}
+    return {
+        "specialists": specialists,
+        "methodology": methodology,
+        "plan": plan,
+        "task_dependencies": parsed.get("tasks"),
+    }
 
 
 def _plan_specialist_tasks(state: State) -> State:
@@ -132,55 +103,87 @@ def _plan_specialist_tasks(state: State) -> State:
         ]}
 
     tasks = list(dict.fromkeys(specialists))
-    logger.info("plan-specialist-tasks created %d task(s): %s", len(tasks), tasks)
-    return {"pending_tasks": tasks, "completed_tasks": [], "current_task": ""}
+    raw_dependencies = state.get("task_dependencies")
+    dependencies = {task: [] for task in tasks}
+    if raw_dependencies is not None:
+        if not isinstance(raw_dependencies, list) or len(raw_dependencies) != len(tasks):
+            return {"errors": ["Invalid specialist dependency plan."]}
+        seen = set()
+        for entry in raw_dependencies:
+            if not isinstance(entry, dict) or not isinstance(entry.get("specialist"), str) or entry["specialist"] not in dependencies:
+                return {"errors": ["Invalid specialist dependency plan."]}
+            name = entry["specialist"]
+            if name in seen:
+                return {"errors": ["Invalid specialist dependency plan."]}
+            seen.add(name)
+            parents = entry.get("depends_on")
+            if not isinstance(parents, list) or any(
+                not isinstance(parent, str) or parent == name or parent not in dependencies
+                for parent in parents
+            ):
+                return {"errors": ["Invalid specialist dependency plan."]}
+            dependencies[name] = parents
+
+    stages = []
+    remaining = set(tasks)
+    while remaining:
+        ready = [task for task in tasks if task in remaining and set(dependencies[task]).isdisjoint(remaining)]
+        if not ready:
+            return {"errors": ["Specialist dependency plan contains a cycle."]}
+        stages.append(ready)
+        remaining.difference_update(ready)
+    logger.info("plan-specialist-tasks created stages: %s", stages)
+    return {"pending_tasks": tasks, "completed_tasks": [], "current_task": "", "task_stages": stages, "task_dependencies": dependencies}
 
 
-def _select_next_task(state: State) -> State:
-    pending_tasks = state.get("pending_tasks") or []
-    if not pending_tasks:
-        logger.info("select-next-task: queue empty; response synthesis is ready")
-        return {"current_task": ""}
+def _run_stage(state: State, runtime: Runtime[Context]) -> State:
+    stages = state.get("task_stages") or []
+    if not stages:
+        return {"task_stages": []}
 
-    current_task = pending_tasks[0]
-    logger.info(
-        "select-next-task selected '%s' (%d task(s) queued)",
-        current_task,
-        len(pending_tasks),
-    )
-    return {"current_task": current_task}
+    stage = stages[0]
+    chart_data, chart_errors = _get_chart_data(state, runtime)
+    if chart_errors:
+        return {"task_stages": [], "errors": chart_errors}
 
+    dependencies = state.get("task_dependencies") or {}
+    previous_results = state.get("specialist_results") or []
+    updates = []
+    runnable = []
+    for task in stage:
+        parents = dependencies.get(task, [])
+        if any(not any(result["specialist"] == parent for result in previous_results) for parent in parents):
+            updates.append({"errors": [f"{task} skipped: dependency did not produce a result."]})
+        else:
+            runnable.append(task)
 
-def _run_specialist(state: State, runtime: Runtime[Context]) -> State:
-    current_task = state.get("current_task", "")
-    if not current_task:
-        logger.warning("run-specialist reached without a current task")
-        return {"errors": ["No specialist task was ready for execution."]}
-    return execute_specialist(state, runtime, current_task)
+    def execute(task: str) -> State:
+        task_state = {
+            **state,
+            "chart_data": chart_data,
+            "dependency_results": [
+                result for result in previous_results if result["specialist"] in dependencies.get(task, [])
+            ],
+        }
+        return execute_specialist(task_state, runtime, task)
 
+    if len(runnable) > 1:
+        with ThreadPoolExecutor(max_workers=len(runnable)) as pool:
+            updates.extend(pool.map(execute, runnable))
+    else:
+        updates.extend(execute(task) for task in runnable)
 
-def _collect_specialist_result(state: State) -> State:
-    current_task = state.get("current_task", "")
-    pending_tasks = list(state.get("pending_tasks") or [])
-    completed_tasks = list(state.get("completed_tasks") or [])
-    if current_task:
-        if pending_tasks and pending_tasks[0] == current_task:
-            pending_tasks.pop(0)
-        elif current_task in pending_tasks:
-            pending_tasks.remove(current_task)
-        completed_tasks.append(current_task)
-
-    logger.info(
-        "collect-specialist-result recorded '%s'; completed=%d pending=%d",
-        current_task,
-        len(completed_tasks),
-        len(pending_tasks),
-    )
+    results = [result for update in updates for result in update.get("specialist_results", [])]
+    errors = [error for update in updates for error in update.get("errors", [])]
+    completed = list(state.get("completed_tasks") or []) + stage
     return {
-        "pending_tasks": pending_tasks,
-        "completed_tasks": completed_tasks,
-        "current_task": "",
-        "iteration_count": len(completed_tasks),
+        "chart_data": chart_data,
+        "specialist_results": results,
+        "errors": errors,
+        "task_stages": stages[1:],
+        "pending_tasks": [task for task in state.get("pending_tasks", []) if task not in stage],
+        "completed_tasks": completed,
+        "iteration_count": len(completed),
     }
 
 
@@ -226,50 +229,14 @@ def _synthesize_response(state: State) -> State:
     return {"answer": response.content}
 
 
-def _persist_conversation_turn(
-    state: State, runtime: Runtime[Context]
-) -> State:
-    context = runtime.context or {}
-    store = context.get("conversation_store")
-    if store is None:
-        logger.warning("conversation store unavailable; turn was not persisted")
-        return {"history_persisted": False}
-
-    persisted = store.persist_turn(
-        conversation_id=context.get("conversation_id", ""),
-        session_id=context.get("session_id", ""),
-        owner=context.get("username", ""),
-        user_message_id=context.get("message_id", ""),
-        user_content=state.get("user_query", ""),
-        assistant_content=state.get("answer", ""),
-        request_fingerprint=context.get("request_fingerprint"),
-        claim_token=context.get("request_claim_token"),
-    )
-    logger.info(
-        "persist-conversation-turn completed conversation_id=%s persisted=%s",
-        context.get("conversation_id", ""),
-        persisted,
-    )
-    return {"history_persisted": persisted}
-
-
 def _route_after_context_resolution(state: Mapping[str, object]) -> str:
     destination = "synthesize-response" if state.get("errors") else "classify-request"
     logger.info("resolve-conversation-context routing to '%s'", destination)
     return destination
 
 
-def _route_selected_task(state: Mapping[str, object]) -> str:
-    destination = "run-specialist" if state.get("current_task") else "synthesize-response"
-    logger.info("select-next-task routing to '%s'", destination)
-    return destination
-
-
-def _route_after_collection(state: Mapping[str, object]) -> str:
-    destination = (
-        "select-next-task" if state.get("pending_tasks") else "synthesize-response"
-    )
-    logger.info("collect-specialist-result routing to '%s'", destination)
+def _route_stage(state: Mapping[str, object]) -> str:
+    destination = "run-stage" if state.get("task_stages") else "synthesize-response"
     return destination
 
 
@@ -277,9 +244,9 @@ def build_orchestrator_graph():
     """Build the top-level workflow for the Astrologer Manager.
 
     Conversation context is loaded from durable storage. Request classification
-    selects specialists and methodology, task planning creates a queue, and each
-    selected task invokes one specialist subgraph before its result is collected.
-    The final user-visible turn is persisted after response synthesis.
+    selects specialists and methodology; independent tasks run together in
+    dependency stages before the final response is synthesized.
+    The connector supplies history and persists the final user-visible turn.
     """
 
     logger.info("Building orchestrator graph")
@@ -287,11 +254,8 @@ def build_orchestrator_graph():
     graph.add_node("resolve-conversation-context", _resolve_conversation_context)
     graph.add_node("classify-request", _classify_request)
     graph.add_node("plan-specialist-tasks", _plan_specialist_tasks)
-    graph.add_node("select-next-task", _select_next_task)
-    graph.add_node("run-specialist", _run_specialist)
-    graph.add_node("collect-specialist-result", _collect_specialist_result)
+    graph.add_node("run-stage", _run_stage)
     graph.add_node("synthesize-response", _synthesize_response)
-    graph.add_node("persist-conversation-turn", _persist_conversation_turn)
 
     graph.add_edge(START, "resolve-conversation-context")
     graph.add_conditional_edges(
@@ -303,25 +267,17 @@ def build_orchestrator_graph():
         },
     )
     graph.add_edge("classify-request", "plan-specialist-tasks")
-    graph.add_edge("plan-specialist-tasks", "select-next-task")
+    graph.add_conditional_edges("plan-specialist-tasks", _route_stage, {
+        "run-stage": "run-stage", "synthesize-response": "synthesize-response",
+    })
     graph.add_conditional_edges(
-        "select-next-task",
-        _route_selected_task,
+        "run-stage",
+        _route_stage,
         {
-            "run-specialist": "run-specialist",
+            "run-stage": "run-stage",
             "synthesize-response": "synthesize-response",
         },
     )
-    graph.add_edge("run-specialist", "collect-specialist-result")
-    graph.add_conditional_edges(
-        "collect-specialist-result",
-        _route_after_collection,
-        {
-            "select-next-task": "select-next-task",
-            "synthesize-response": "synthesize-response",
-        },
-    )
-    graph.add_edge("synthesize-response", "persist-conversation-turn")
-    graph.add_edge("persist-conversation-turn", END)
+    graph.add_edge("synthesize-response", END)
 
     return graph.compile()

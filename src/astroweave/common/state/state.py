@@ -43,6 +43,8 @@ class State(TypedDict, total=False):
     history_persisted: bool
     history_replayed: bool
     plan: list[str]
+    task_dependencies: dict[str, list[str]] | list[dict[str, Any]] | None
+    task_stages: list[list[str]]
     pending_tasks: list[str]
     completed_tasks: list[str]
     current_task: str
@@ -53,6 +55,7 @@ class State(TypedDict, total=False):
     chart_data: dict[str, Any]
     specialist_analysis: str
     specialist_results: Annotated[list[SpecialistResult], operator.add]
+    dependency_results: list[SpecialistResult]
     evaluation: str
     needs_replanning: bool
     iteration_count: int

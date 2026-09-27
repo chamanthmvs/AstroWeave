@@ -391,6 +391,18 @@ class ConversationStore:
                 )
             return None, row["answer"]
 
+    def request_ids(self, message_id: str, owner: str) -> tuple[str, str] | None:
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT conversation_id, session_id, owner FROM conversation_requests WHERE message_id = ?",
+                (message_id,),
+            ).fetchone()
+        if row is None:
+            return None
+        if row["owner"] != owner:
+            raise ConversationAccessError("Message ID is not owned by this user.")
+        return row["conversation_id"], row["session_id"]
+
     def release_request(self, message_id: str, claim_token: str) -> None:
         with self._connect() as connection:
             connection.execute(
