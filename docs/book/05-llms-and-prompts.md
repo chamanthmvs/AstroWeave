@@ -90,15 +90,17 @@ In `src/astroweave/graphs/specialist/specialist_graph.py`, `_executor(state)` do
 
 ```mermaid
 flowchart TD
-    A[Read current_task] --> B[Look up AgentDefinition]
-    B -->|missing| E[Return error state]
-    B -->|found| C[Assemble user_content]
-    C --> D[Check optional context-size limit]
-    D --> M[Resolve configured specialist LLM]
-    M --> P[Create SystemMessage + HumanMessage]
-    P --> I[invoke_json_response]
-    I --> R[Parse JSON text]
-    R --> O[Return analysis, conclusion, confidence]
+    A["Read current_task"] --> B["Look up AgentDefinition"]
+    B -->|missing| E["Return error state"]
+    B -->|found| C["Assemble user_content"]
+    C --> D{"Context limit disabled or within limit?"}
+    D -->|No| F
+    D -->|Yes| M["Resolve configured specialist LLM"]
+    M --> P["Create SystemMessage and HumanMessage"]
+    P --> I["invoke_json_response (up to two attempts)"]
+    I --> R{"Valid JSON response?"}
+    R -->|Yes| O["Return analysis, conclusion, confidence"]
+    R -->|No after retry| F["Return error state"]
 ```
 
 Details:
@@ -128,11 +130,14 @@ That validates **JSON syntax**, not the full business contract. The current spec
 
 ```mermaid
 flowchart LR
-    Text[Model response text] --> JSON[json.loads]
-    JSON -->|valid JSON| Dict[Python dict]
-    JSON -->|invalid JSON| Error[ValueError]
-    Dict --> Fields[Read expected keys with defaults]
-    Fields --> Result[SpecialistResult]
+    Text["Model response text"] --> Parse["Parse JSON attempt"]
+    Parse --> Valid{"Valid JSON?"}
+    Valid -->|Yes| Dict["Python dictionary"]
+    Valid -->|No| Retry{"Retry available?"}
+    Retry -->|Yes| Parse
+    Retry -->|No| Error["Raise ValueError to caller"]
+    Dict --> Fields["Read expected keys with defaults"]
+    Fields --> Result["SpecialistResult"]
 ```
 
 ## 7. Retry behavior

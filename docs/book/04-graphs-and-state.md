@@ -12,11 +12,11 @@ A workflow graph is a map of steps and allowed transitions. The steps are ordina
 
 ```mermaid
 flowchart TD
-    START((START)) --> R[resolve conversation context]
-    R -->|query valid| C[classify request]
-    R -->|early error| Y[synthesize response]
-    C --> P[plan specialist tasks]
-    P -->|stages exist| S[run next stage]
+    START((START)) --> R["resolve conversation context"]
+    R -->|query valid| C["classify request"]
+    R -->|early error| Y["synthesize response"]
+    C --> P["plan specialist tasks"]
+    P -->|stages exist| S["run next stage"]
     P -->|no stages or plan error| Y
     S -->|more stages| S
     S -->|no stages remain| Y
@@ -75,9 +75,9 @@ graph.add_conditional_edges("plan-specialist-tasks", _route_stage, {
 
 ```mermaid
 flowchart LR
-    Node[Current node] --> Router[Python routing function]
-    Router -->|returns key A| DestinationA[Mapped graph node A]
-    Router -->|returns key B| DestinationB[Mapped graph node B]
+    Node["Current node"] --> Router["Python routing function"]
+    Router -->|returns key A| DestinationA["Mapped graph node A"]
+    Router -->|returns key B| DestinationB["Mapped graph node B"]
 ```
 
 ## 4. State: the shared working record
@@ -132,11 +132,11 @@ The API passes it when it invokes the graph. A node that accepts `runtime` can a
 
 ```mermaid
 flowchart LR
-    API[API call] -->|initial state| G[LangGraph]
+    API["API call"] -->|initial state| G["LangGraph"]
     API -->|runtime context| G
-    G --> N1[Node 1]
+    G --> N1["Node 1"]
     N1 -->|state update| G
-    G --> N2[Node 2]
+    G --> N2["Node 2"]
     N2 -->|state update| G
 ```
 
@@ -167,13 +167,13 @@ The stage execution path is:
 
 ```mermaid
 flowchart TD
-    P[Validate dependencies] --> S1[Find currently ready tasks]
-    S1 -->|none ready but tasks remain| E[Cycle or invalid plan error]
-    S1 -->|ready tasks| R[Run ready tasks]
-    R --> C[Collect results and errors]
-    C --> M{More stages?}
+    P["Validate dependencies"] --> S1["Find currently ready tasks"]
+    S1 -->|none ready but tasks remain| E["Cycle or invalid plan error"]
+    S1 -->|ready tasks| R["Run ready tasks"]
+    R --> C["Collect results and errors"]
+    C --> M{"More stages?"}
     M -->|Yes| S1
-    M -->|No| SYN[Synthesize]
+    M -->|No| SYN["Synthesize"]
 ```
 
 ## 8. Concurrency within a stage
@@ -203,12 +203,12 @@ A failed independent task is recorded as an error; other tasks can still succeed
 
 ```mermaid
 flowchart LR
-    START((START)) --> P[planner: currently no-op]
-    P --> X[executor: specialist model call]
-    X --> C[collector: currently no-op]
-    C --> E[evaluator: marks sufficient]
-    E -->|sufficient| S[synthesizer: currently no-op]
-    E -. insufficient route exists, current evaluator doesn't choose it .-> P
+    START((START)) --> P["planner: currently no-op"]
+    P --> X["executor: specialist model call"]
+    X --> C["collector: currently no-op"]
+    C --> E["evaluator: marks sufficient"]
+    E -->|sufficient| S["synthesizer: currently no-op"]
+    E -. insufficient route .-> P
     S --> END((END))
 ```
 

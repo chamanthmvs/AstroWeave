@@ -12,23 +12,23 @@ AstroWeave is not one giant program with one magic “AI” function. It is a se
 
 ```mermaid
 flowchart LR
-    subgraph BrowserSide[User-facing experience]
-      Person[User] --> Streamlit[Streamlit UI]
+    subgraph BrowserSide["User-facing experience"]
+      Person["User"] --> Streamlit["Streamlit UI"]
     end
-    subgraph MainProcess[AstroWeave connector process]
-      API[FastAPI routes] --> Auth[Account/auth helpers]
-      API --> Store[ConversationStore]
-      API --> Orchestrator[Orchestrator graph]
-      Orchestrator --> Dispatcher[Dispatcher]
-      Dispatcher --> Specialist[Specialist graph]
-      Specialist --> Registries[Agent/tool registries]
-      Orchestrator --> LLMFactory[LLM factory]
+    subgraph MainProcess["AstroWeave connector process"]
+      API["FastAPI routes"] --> Auth["Account/auth helpers"]
+      API --> Store["ConversationStore"]
+      API --> Orchestrator["Orchestrator graph"]
+      Orchestrator --> Dispatcher["Dispatcher"]
+      Dispatcher --> Specialist["Specialist graph"]
+      Specialist --> Registries["Agent/tool registries"]
+      Orchestrator --> LLMFactory["LLM factory"]
       Specialist --> LLMFactory
     end
-    subgraph OtherProcesses[Separate services]
-      Chart[Chart service]
-      Remote[Optional specialist service]
-      Provider[LLM provider API]
+    subgraph OtherProcesses["Separate services"]
+      Chart["Chart service"]
+      Remote["Optional specialist service"]
+      Provider["LLM provider API"]
     end
     Streamlit -->|HTTP JSON| API
     Dispatcher -->|HTTP JSON| Chart
@@ -103,16 +103,16 @@ A **process** is a running program with its own memory. A function call inside a
 
 ```mermaid
 flowchart TB
-    subgraph ConnectorProcess[One process: API + graph code]
+    subgraph ConnectorProcess["One process: API + graph code"]
        A[FastAPI] --> O[Orchestrator]
        O --> D[Dispatcher]
        D --> S[Specialist graph]
        S --> P[Python provider wrapper]
     end
-    DB[(SQLite file)] <-->|SQL statements| A
-    C[Chart process] <-->|HTTP + JSON| D
-    M[LLM provider] <-->|provider API| P
-    UI[Streamlit process] <-->|HTTP + JSON| A
+    DB[("SQLite file")] <-->|SQL statements| A
+    C["Chart process"] <-->|HTTP + JSON| D
+    M["LLM provider"] <-->|provider API| P
+    UI["Streamlit process"] <-->|HTTP + JSON| A
 ```
 
 The chart calculation is remote from the connector process even if both run on one laptop. “Remote” here means a different server process reached through HTTP, not necessarily a different physical machine.

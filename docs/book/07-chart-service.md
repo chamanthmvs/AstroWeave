@@ -10,16 +10,16 @@ Who calculates the chart, how does the request reach that code, what comes back,
 
 ```mermaid
 flowchart LR
-    subgraph Main[Main AstroWeave process]
-      O[Orchestrator] --> D[Dispatcher]
-      D --> CL[chart_client.get_birth_chart]
-      CL --> H[httpx.post]
+    subgraph Main["Main AstroWeave process"]
+      O["Orchestrator"] --> D["Dispatcher"]
+      D --> CL["chart_client.get_birth_chart"]
+      CL --> H["httpx.post"]
     end
-    H -->|JSON over HTTP| API[Chart service /chart endpoint]
-    subgraph ChartProcess[Separate chart process]
-      API --> V[Validate ChartRequest]
-      V --> J[PyJHora calculations]
-      J --> S[Shape results into dictionaries]
+    H -->|JSON over HTTP| API["Chart service /chart endpoint"]
+    subgraph ChartProcess["Separate chart process"]
+      API --> V["Validate ChartRequest"]
+      V --> J["PyJHora calculations"]
+      J --> S["Shape results into dictionaries"]
     end
     S -->|HTTP JSON response| CL
     CL --> D
@@ -63,12 +63,12 @@ The `json=payload` argument asks HTTPX to serialize the dictionary to JSON and s
 
 ```mermaid
 flowchart LR
-    Request[Build payload] --> Post[HTTP POST]
-    Post --> Response[Receive HTTP response]
-    Response --> Status{Successful status?}
-    Status -->|No| Raise[raise_for_status raises HTTP error]
-    Status -->|Yes| Decode[response.json]
-    Decode --> Dict[Python dictionary returned]
+  Request["Build payload"] --> Post["HTTP POST"]
+  Post --> Response["Receive HTTP response"]
+  Response --> Status{"Successful status?"}
+  Status -->|No| Raise["raise_for_status raises HTTP error"]
+  Status -->|Yes| Decode["Decode response JSON"]
+  Decode --> Dict["Return Python dictionary"]
 ```
 
 - `raise_for_status()` turns a non-success HTTP status into an exception.
@@ -123,13 +123,13 @@ The orchestrator's stage runner calls `_get_chart_data(...)`. On the first succe
 
 ```mermaid
 flowchart TD
-    A[Run stage 1] --> B{chart_data already in state?}
-    B -->|No| C[Call chart service once]
-    C --> D[Store chart in state]
+  A["Run a specialist stage"] --> B{"chart_data already in state?"}
+  B -->|No| C["Call chart service once"]
+  C --> D["Store chart in state"]
     B -->|Yes| D
-    D --> E[Pass same chart to career]
-    D --> F[Pass same chart to finance]
-    D --> G[Pass same chart to later dependent task]
+  D --> E["Pass chart to career"]
+  D --> F["Pass chart to finance"]
+  D --> G["Pass chart to later dependent task"]
 ```
 
 The chart is also passed in the specialist handoff to a local or remote specialist. It is not recalculated independently by each LLM.
