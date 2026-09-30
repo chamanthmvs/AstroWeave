@@ -12,13 +12,13 @@ If I want to understand the real implementation instead of only reading explanat
 
 ```mermaid
 flowchart LR
-    UI[Streamlit] --> API[API /run]
-    API --> O[Orchestrator graph]
-    O --> D[Dispatcher]
-    D --> CH[Chart client]
-    D --> SG[Specialist graph]
-    SG --> L[LLM factory]
-    O --> STORE[Conversation store]
+  UI["Streamlit"] --> API["API /run"]
+  API --> O["Orchestrator graph"]
+  O --> D["Dispatcher"]
+  D --> CH["Chart client"]
+  D --> SG["Specialist graph"]
+  SG --> L["LLM factory"]
+  API --> STORE["Conversation store"]
 ```
 
 Recommended order:
@@ -154,17 +154,17 @@ Tests are executable examples, but inspect their mocks: a mocked dependency is n
 
 ```mermaid
 flowchart TB
-    State[State type] --> Orchestrator[Orchestrator graph]
-    Context[Context type] --> Orchestrator
-    Orchestrator --> Dispatcher[Dispatcher]
-    Dispatcher --> ChartClient[Chart client]
-    ChartClient --> ChartService[Chart service]
-    Dispatcher --> SpecialistGraph[Specialist graph]
-    SpecialistGraph --> AgentRegistry[Agent registry]
-    AgentRegistry --> ToolRegistry[Tool registry]
-    SpecialistGraph --> LLMFactory[LLM factory]
-    LLMFactory --> ProviderRegistry[Provider builders]
-    API[FastAPI connector] --> Store[Conversation store]
+  State["State type"] --> Orchestrator["Orchestrator graph"]
+  Context["Context type"] --> Orchestrator
+  Orchestrator --> Dispatcher["Dispatcher"]
+  Dispatcher --> ChartClient["Chart client"]
+  ChartClient --> ChartService["Chart service"]
+  Dispatcher --> SpecialistGraph["Specialist graph"]
+  SpecialistGraph --> AgentRegistry["Agent registry"]
+  AgentRegistry --> ToolRegistry["Tool registry"]
+  SpecialistGraph --> LLMFactory["LLM factory"]
+  LLMFactory --> ProviderRegistry["Provider builders"]
+  API["FastAPI connector"] --> Store["Conversation store"]
     API --> Orchestrator
     API --> Auth[Auth helpers]
 ```

@@ -15,9 +15,9 @@ A test is useful when you can say what claim it verifies. AstroWeave organizes t
 
 ```mermaid
 flowchart LR
-    U[Unit test: wrapper/registry] --> C[Component confidence]
-    I[Integration test: API + mocked graph] --> B[Boundary confidence]
-    E[Real end-to-end run] --> X[Environment/provider/service confidence]
+    U["Unit test: wrapper and registry"] --> C["Component confidence"]
+    I["Integration test: API and mocked graph"] --> B["Boundary confidence"]
+    E["Real end-to-end run"] --> X["Environment, provider, and service confidence"]
 ```
 
 More arrows to the right involve more real components and more environmental variability. A mocked test is often faster and more deterministic; an end-to-end run proves more integration, but requires real services and credentials.
@@ -110,18 +110,18 @@ A health response proves only that that process handled its health endpoint. It 
 
 ```mermaid
 flowchart TD
-    A[Can UI reach connector?] -->|No| U[Check Streamlit request URL/network]
-    A -->|Yes| B[Does auth succeed?]
-    B -->|No| T[Check bearer token and shared auth secret]
-    B -->|Yes| C[Does graph classify a registered specialist?]
-    C -->|No| P[Check classifier response, prompt, registry]
-    C -->|Yes| D[Can chart client reach port 8100?]
-    D -->|No| CH[Check chart-service process and URL]
-    D -->|Yes| E[Does specialist model call return valid JSON?]
-    E -->|No| L[Check provider key, model, finish reason, limits]
-    E -->|Yes| F[Did synthesis produce answer and did DB persist?]
-    F -->|No| S[Check graph state, errors, SQLite, request claim]
-    F -->|Yes| DONE[Inspect rendered response]
+    A["Can UI reach connector?"] -->|No| U["Check Streamlit request URL and network"]
+    A -->|Yes| B["Does authentication succeed?"]
+    B -->|No| T["Check bearer token and shared auth secret"]
+    B -->|Yes| C["Did graph classify a registered specialist?"]
+    C -->|No| P["Check classifier response, prompt, and registry"]
+    C -->|Yes| D["Can chart client reach port 8100?"]
+    D -->|No| CH["Check chart-service process and URL"]
+    D -->|Yes| E["Did specialist model call return valid JSON?"]
+    E -->|No| L["Check provider key, model, finish reason, and limits"]
+    E -->|Yes| F["Did synthesis produce an answer and did API persist it?"]
+    F -->|No| S["Check graph state, errors, SQLite, and request claim"]
+    F -->|Yes| DONE["Inspect rendered response"]
 ```
 
 Useful information includes the HTTP status/body, structured `state.errors`, application logs, and process/port status. Avoid logging passwords, bearer tokens, or provider API keys.
@@ -152,13 +152,22 @@ A real test exercises boundaries in sequence:
 
 ```mermaid
 flowchart LR
-    U[Authenticated HTTP request] --> A[API + SQLite]
-    A --> O[Graph]
-    O --> C[Chart service]
-    O --> L[Real LLM provider]
-    C --> O
-    L --> O
-    O --> D[Persisted answer]
+    U["Authenticated HTTP request"] --> A["API"]
+    A --> O["Orchestrator graph"]
+    O --> CL["Classifier LLM call"]
+    CL --> O
+    O --> D["Dispatcher"]
+    D --> C["Chart service via HTTP"]
+    C --> D
+    D --> S["Specialist graph"]
+    S --> SL["Specialist LLM call"]
+    SL --> S
+    S --> O
+    O --> SY["Synthesis LLM call"]
+    SY --> O
+    O --> A
+    A --> DB[("SQLite: persisted answer")]
+    A --> UI["Response to UI"]
 ```
 
 Before concluding the integration works, verify which API process is actually bound to the port and which environment has the provider key. A stale API process can make a successful curl response misleading because it may be serving older code.

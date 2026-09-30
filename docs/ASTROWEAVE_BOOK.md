@@ -12,15 +12,15 @@
 
 ```mermaid
 flowchart LR
-    A[01 Orientation] --> B[02 One request]
-    B --> C[03 Python foundations]
-    C --> D[04 Graphs and data]
-    D --> E[05 LLMs and prompts]
-    E --> F[06 Tools and handoffs]
-    F --> G[07 Chart service]
-    G --> H[08 Accounts and history]
-    H --> I[09 Tests and operations]
-    I --> J[10 Guided source tour]
+    A["01 Orientation"] --> B["02 One request"]
+    B --> C["03 Python foundations"]
+    C --> D["04 Graphs and data"]
+    D --> E["05 LLMs and prompts"]
+    E --> F["06 Tools and handoffs"]
+    F --> G["07 Chart service"]
+    G --> H["08 Accounts and history"]
+    H --> I["09 Tests and operations"]
+    I --> J["10 Guided source tour"]
 ```
 
 | Chapter | The question it answers |
@@ -40,17 +40,17 @@ flowchart LR
 
 ```mermaid
 flowchart TB
-    U[Person using the app] --> UI[Streamlit user interface]
-    UI -->|HTTPS/HTTP request: JSON| API[FastAPI connector]
-    API --> AUTH[Authenticate and load profile]
-    API --> DB[(SQLite: users and conversation records)]
-    API --> GRAPH[LangGraph orchestrator]
-    GRAPH -->|prompt and messages| MODEL[Configured LLM provider]
+    U["Person using the app"] --> UI["Streamlit user interface"]
+    UI -->|HTTPS/HTTP request: JSON| API["FastAPI connector"]
+    API --> AUTH["Authenticate and load profile"]
+    API --> DB[("SQLite: users and conversation records")]
+    API --> GRAPH["LangGraph orchestrator"]
+    GRAPH -->|prompt and messages| MODEL["Configured LLM provider"]
     MODEL -->|routing response| GRAPH
-    GRAPH --> DISPATCH[Dispatcher]
-    DISPATCH -->|HTTP POST /chart| CHART[Chart service: FastAPI + PyJHora]
+    GRAPH --> DISPATCH["Dispatcher"]
+    DISPATCH -->|HTTP POST /chart| CHART["Chart service: FastAPI + PyJHora"]
     CHART -->|chart JSON| DISPATCH
-    DISPATCH --> SPECIALIST[Specialist graph]
+    DISPATCH --> SPECIALIST["Specialist graph"]
     SPECIALIST -->|prompt and chart facts| MODEL
     MODEL -->|analysis JSON| SPECIALIST
     SPECIALIST -->|specialist result| GRAPH

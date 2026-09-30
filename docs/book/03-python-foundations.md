@@ -38,10 +38,10 @@ At the end, `invoice_total` is `108.0`. The function can run only because some c
 
 ```mermaid
 flowchart LR
-    Call[calculate_total(100.0, tax=8.0)] --> Bind[price = 100.0, tax = 8.0]
-    Bind --> Body[Run function body]
-    Body --> Return[Return 108.0]
-    Return --> Caller[invoice_total receives 108.0]
+    Call["calculate_total with price 100.0 and tax 8.0"] --> Bind["Bind price and tax parameters"]
+    Bind --> Body["Run function body"]
+    Body --> Return["Return 108.0"]
+    Return --> Caller["invoice_total receives 108.0"]
 ```
 
 In AstroWeave, compare these call sites:
@@ -71,9 +71,9 @@ Here `chosen_action` refers to the same function object as `greet`. The call wit
 
 ```mermaid
 flowchart LR
-    Name1[greet] --> Fn[Function object]
-    Name2[chosen_action] --> Fn
-    Call[chosen_action("Sam")] --> Fn
+    Name1["greet"] --> Fn["Function object"]
+    Name2["chosen_action"] --> Fn
+    Call["chosen_action with argument Sam"] --> Fn
 ```
 
 A dictionary registry is the same idea at scale: names map to objects. It does not make those objects execute automatically.

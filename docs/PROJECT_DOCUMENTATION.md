@@ -205,7 +205,7 @@ flowchart LR
     User[User] --> UI[Streamlit UI]
     UI --> Geo[Nominatim geocoding]
     UI --> API[FastAPI connector]
-    API --> DB[(SQLite accounts and conversations)]
+    API --> DB[("SQLite accounts and conversations")]
     API --> Orchestrator[LangGraph DAG orchestrator]
     Orchestrator --> LLM[Configured LLM provider]
     Orchestrator --> AgentRegistry[Specialist agent registry]
@@ -245,6 +245,8 @@ sequenceDiagram
     participant UI as Streamlit
     participant API as Connector API
     participant O as DAG Orchestrator
+    participant D as Specialist dispatcher
+    participant CC as Chart HTTP client
     participant C as Chart Service
     participant S as Specialist Graph
     participant L as LLM Provider
@@ -256,8 +258,11 @@ sequenceDiagram
     O->>L: Classify request
     L-->>O: Specialists, dependencies, methodology
     O->>O: Validate DAG and derive stages
-    O->>C: POST /chart
-    C-->>O: Full chart payload
+    O->>D: Run stage and dispatch ready tasks
+    D->>CC: Get or reuse chart data
+    CC->>C: POST /chart
+    C-->>CC: Full chart payload
+    CC-->>O: Decoded chart dictionary
     loop For each dependency stage
       O->>S: Invoke ready specialists concurrently (local or HTTP)
         S->>L: Structured analysis request

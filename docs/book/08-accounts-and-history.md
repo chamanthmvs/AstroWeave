@@ -12,40 +12,52 @@ AstroWeave uses SQLite, a database stored in a local file. User accounts and con
 
 ```mermaid
 erDiagram
-    USERS ||--o{ CONVERSATIONS : owns
     CONVERSATIONS ||--o{ CONVERSATION_MESSAGES : contains
     CONVERSATION_SESSIONS ||--o{ CONVERSATION_MESSAGES : groups
-    CONVERSATIONS ||--o{ CONVERSATION_REQUESTS : tracks
     USERS {
+      integer id PK
       text email
       text name
       text password_hash
-      text birth_details
+      text birth_date
+      text birth_time
+      text birth_place
+      real birth_latitude
+      real birth_longitude
+      real utc_offset_hours
+      integer date_known
     }
     CONVERSATIONS {
-      text conversation_id
+      text conversation_id PK
       text owner
       text title
     }
     CONVERSATION_SESSIONS {
-      text session_id
+      text session_id PK
       text owner
     }
     CONVERSATION_MESSAGES {
-      text message_id
+      text message_id PK
+      text conversation_id FK
+      text session_id FK
+      text owner
       text role
       text content
       int sequence_number
     }
     CONVERSATION_REQUESTS {
-      text message_id
+      text message_id PK
+      text conversation_id
+      text session_id
+      text owner
       text request_fingerprint
+      text claim_token
       text status
       text answer
     }
 ```
 
-The entity diagram is conceptual: birth details are stored as columns in the user table; SQLite foreign keys link transcript tables. The exact schema is initialized in `app/auth.py` and `common/conversation/store.py`.
+Only the two message-to-conversation/session relationships shown are declared SQLite foreign keys. User ownership and request-to-conversation/session associations are enforced by application code using the stored IDs and owner values, not by declared SQL foreign keys. The exact schemas are initialized in `app/auth.py` and `common/conversation/store.py`.
 
 - **Account store (`app/auth.py`):** registration, password hashing/checks, birth-details persistence, user lookup.
 - **Conversation store (`common/conversation/store.py`):** conversation/session IDs, transcript messages, bounded history loading, request claims, replay, deletion.
@@ -58,13 +70,13 @@ At sign-in, `_password_matches(...)` recomputes a candidate derived key using th
 
 ```mermaid
 flowchart LR
-    Password[Password typed] -->|registration| Salt[Generate random salt]
-    Salt --> Scrypt[scrypt password + salt]
-    Scrypt --> Hash[(Store salt + parameters + derived key)]
-    Password2[Password typed at sign-in] --> Recompute[scrypt using saved salt + parameters]
-    Hash --> Compare[Constant-time compare]
-    Recompute --> Compare
-    Compare -->|match| User[Return account]
+  Password["Password typed"] -->|registration| Salt["Generate random salt"]
+  Salt --> Scrypt["scrypt password and salt"]
+  Scrypt --> Hash[("Store salt, parameters, and derived key")]
+  Password2["Password typed at sign-in"] --> Recompute["scrypt using saved salt and parameters"]
+  Hash --> Compare["Constant-time compare"]
+  Recompute --> Compare
+  Compare -->|match| User["Return account"]
 ```
 
 The password hash is used for verification. It cannot be used as a bearer token or sent to the LLM. Password reset, account recovery, and remote identity providers are not part of the current user flow.
@@ -126,12 +138,13 @@ The store returns these two scopes separately. The connector combines them into 
 
 ```mermaid
 flowchart TB
-    DB[(Full durable transcript)] --> PS[Prior-session window: default 8]
-    DB --> CS[Current-session window: default 12]
-    PS --> Combine[Connector combines bounded context]
+  DB[("Full durable transcript")]
+  DB --> PS["Prior-session window: default 8"]
+  DB --> CS["Current-session window: default 12"]
+  PS --> Combine["Connector combines bounded context"]
     CS --> Combine
-    Combine --> Graph[Graph receives messages]
-    Graph --> Model[Selected prompt receives conversation context]
+  Combine --> Graph["Graph receives messages"]
+  Graph --> Model["Selected prompt receives conversation context"]
 ```
 
 “Conversation memory” here means stored conversation history loaded into future requests. It does not mean the LLM remembers across API calls without application-provided history. Rolling summaries and cross-conversation personal memory are not currently implemented.
@@ -143,13 +156,18 @@ A user may click twice or a network can fail after the server finishes but befor
 The API calculates a stable SHA-256 fingerprint of relevant request fields, excluding the message ID and optional username. The store claims the ID before expensive graph work:
 
 ```mermaid
-stateDiagram-v2
-    [*] --> Pending: claim new message_id
-    Pending --> Completed: persist answer and transcript
-    Completed --> Completed: same ID + same fingerprint returns saved answer
-    Pending --> Conflict: same ID submitted while active
-    Pending --> Conflict: same ID + different fingerprint
-    Pending --> Pending: expired abandoned lease can be reclaimed
+flowchart TD
+  Start["New /run request"] --> Known{"message_id already claimed?"}
+  Known -->|No| Claim["Create pending claim"]
+  Claim --> Work["Run graph under claim"]
+  Work --> Persist["Persist turn and complete claim"]
+  Persist --> Answer["Return answer"]
+  Known -->|Yes| Fingerprint{"Request fingerprint matches?"}
+  Fingerprint -->|No| Changed["Reject with HTTP 409; stored claim unchanged"]
+  Fingerprint -->|Yes, completed| Replay["Return previously saved answer"]
+  Fingerprint -->|Yes, pending lease valid| Busy["Reject with HTTP 409; request remains pending"]
+  Fingerprint -->|Yes, pending lease expired| Reclaim["Reclaim with a new fencing token"]
+  Reclaim --> Work
 ```
 
 A request has a configurable lease (30 minutes by default, minimum 60 seconds). The claim token fences off an older worker if an abandoned request is reclaimed. This prevents a stale worker from completing work after a newer worker owns the claim.

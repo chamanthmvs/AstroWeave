@@ -17,21 +17,24 @@ sequenceDiagram
     participant O as Orchestrator graph
     participant L as LLM provider
     participant D as Dispatcher
+    participant CC as Chart HTTP client
     participant C as Chart service
     participant S as Specialist graph
 
     User->>UI: Enter question and choose methodology
     UI->>API: POST /run + bearer token + JSON
-    API->>API: Validate body; identify authenticated user
+    API->>API: Validate body and identify authenticated user
     API->>DB: Load profile, claim message_id, load bounded history
     DB-->>API: Birth details, claim, conversation/session messages
     API->>O: invoke(initial_state, context)
     O->>L: Classify question: specialist(s), methodology, dependencies
     L-->>O: JSON-shaped routing text
-    O->>O: Validate specialist names; plan dependency stages
-    O->>D: Run ready specialist task(s)
-    D->>C: POST /chart with birth inputs
-    C-->>D: Chart data as JSON
+    O->>O: Validate specialist names and plan dependency stages
+    O->>D: Run stage and dispatch ready specialist task(s)
+    D->>CC: get_birth_chart(birth_details)
+    CC->>C: POST /chart with birth inputs
+    C-->>CC: Chart data as JSON
+    CC-->>D: Decoded chart dictionary
     D->>S: invoke(handoff, context) [local path]
     S->>L: Specialist prompt + question + history + chart + findings
     L-->>S: JSON text: analysis, conclusion, confidence
@@ -149,8 +152,8 @@ Suppose the LLM returns three specialists: `career`, `finance`, and `love`, with
 
 ```mermaid
 flowchart LR
-    C[career] --> L[love]
-    F[finance]
+    C["career"] --> L["love"]
+    F["finance"]
 ```
 
 A valid execution schedule is:
@@ -205,13 +208,13 @@ The API receives the final graph state and persists exactly the user question an
 
 ```mermaid
 flowchart LR
-    R1[Career result] --> S[Synthesis prompt]
-    R2[Finance result] --> S
-    Q[Original question + bounded history] --> S
-    S --> L[Orchestrator LLM]
-    L --> A[Final answer]
-    A --> P[Persist turn in SQLite]
-    P --> U[Return to UI]
+    R1["Career result"] --> S["Synthesis prompt"]
+    R2["Finance result"] --> S
+    Q["Original question + bounded history"] --> S
+    S --> L["Orchestrator LLM"]
+    L --> A["Final answer"]
+    A --> P["API persists turn in SQLite"]
+    P --> U["Return response to UI"]
 ```
 
 ## 10. Direct-specialist route
