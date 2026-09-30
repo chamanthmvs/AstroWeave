@@ -82,9 +82,10 @@ For the complete functional behavior, architecture, API and state contracts,
 security assessment, operations guide, and implementation roadmap, see the
 [project documentation](docs/PROJECT_DOCUMENTATION.md).
 
-For a beginner-first walkthrough of the codebase and the exact difference
-between registered tools, Python function calls, and LLM-directed tool
-execution, see the [beginner's guide](docs/BEGINNER_GUIDE.md).
+For the visual, chapter-by-chapter beginner's book covering the whole system,
+start at [AstroWeave, Explained](docs/ASTROWEAVE_BOOK.md). Its tool chapter
+explains the difference between registered tools, Python function calls, and
+LLM-directed tool execution.
 
 ## Local Development
 

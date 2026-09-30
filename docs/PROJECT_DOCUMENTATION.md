@@ -22,9 +22,10 @@ This document distinguishes among:
 When this document conflicts with the source code, the source code is the
 runtime authority and this document must be corrected in the same change.
 
-Readers new to Python, agents, and the project can start with the
-[beginner's guide](BEGINNER_GUIDE.md), which explains the runtime handoffs and
-the current tool-execution boundary in plain language.
+Readers new to Python, agents, and the project can start with the visual,
+chapter-by-chapter [AstroWeave beginner's book](ASTROWEAVE_BOOK.md). It follows
+the request lifecycle and introduces Python, graphs, LLMs, tools, chart
+calculations, persistence, tests, and source navigation in learning order.
 
 ## 2. Product Overview
 
@@ -487,9 +488,9 @@ dependency rather than being decorated as an agent tool because chart loading
 currently happens once before specialist invocation and is reused through
 shared state.
 
-For a plain-language, detailed walkthrough of how direct function calls,
-LangGraph graph invocation, LangChain model invocation, and a future LLM-driven
-tool loop differ, see the [beginner's guide](BEGINNER_GUIDE.md).
+For the dedicated chapter explaining how direct function calls, LangGraph
+graph invocation, LangChain model invocation, and a future LLM-driven tool loop
+differ, see [06. Tools and Handoffs](BEGINNER_GUIDE.md).
 
 ## 8. Shared State and Runtime Context
 
