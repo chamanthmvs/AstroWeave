@@ -32,6 +32,22 @@ class ToolRegistry:
     def metadata(self) -> list[ToolMetadata]:
         return [registered_tool.metadata for registered_tool in self._tools.values()]
 
+    def metadata_for_intents(self, intents: Iterable[str]) -> list[ToolMetadata]:
+        selected_intents = set(intents)
+        return [
+            registered_tool.metadata
+            for registered_tool in self._tools.values()
+            if registered_tool.metadata.intent in selected_intents
+        ]
+
+    def grouped_metadata(self) -> dict[str, list[ToolMetadata]]:
+        groups: dict[str, list[ToolMetadata]] = {}
+        for registered_tool in self._tools.values():
+            metadata = registered_tool.metadata
+            if metadata.intent is not None:
+                groups.setdefault(metadata.intent, []).append(metadata)
+        return groups
+
     def __contains__(self, name: object) -> bool:
         return name in self._tools
 
