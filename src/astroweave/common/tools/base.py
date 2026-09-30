@@ -17,6 +17,7 @@ class BaseToolReturnType(BaseModel):
 
 class ToolType(str, Enum):
     FUNCTION = "function"
+    PROMPT = "prompt"
 
 
 ToolResponseType = type[BaseToolReturnType]
@@ -28,7 +29,8 @@ class ToolMetadata(BaseModel):
     name: str
     description: str
     type: ToolType = ToolType.FUNCTION
-    returns: ToolResponseType
+    returns: ToolResponseType | None = None
+    intent: str | None = None
 
 
 class BaseTool(ABC):
@@ -77,6 +79,27 @@ class FunctionTool(BaseTool):
 
     def __call__(self, *args: Any, **kwargs: Any) -> BaseToolReturnType:
         return self.invoke(*args, **kwargs)
+
+
+class PromptTool(BaseTool):
+    """A tool-shaped analysis prompt that is not executable code."""
+
+    def __init__(self, name: str, intent: str, prompt: str) -> None:
+        self._metadata = ToolMetadata(
+            name=name,
+            description=prompt,
+            type=ToolType.PROMPT,
+            intent=intent,
+        )
+
+    @property
+    def metadata(self) -> ToolMetadata:
+        return self._metadata
+
+    def invoke(self, *args: Any, **kwargs: Any) -> BaseToolReturnType:
+        raise RuntimeError(
+            f"Prompt tool '{self.metadata.name}' is descriptive only and cannot be invoked"
+        )
 
 
 @overload

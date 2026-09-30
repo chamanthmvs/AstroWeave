@@ -11,7 +11,11 @@ class AgentRegistryTests(unittest.TestCase):
             {agent.name for agent in SPECIALIST_REGISTRY},
             {"career", "finance", "love", "sports"},
         )
-        self.assertEqual(len(SPECIALIST_REGISTRY.require("career").tools), 0)
+        for agent in SPECIALIST_REGISTRY:
+            grouped_tools = agent.tools.grouped_metadata()
+            self.assertEqual(len(grouped_tools), 4)
+            self.assertEqual(sum(map(len, grouped_tools.values())), 12)
+            self.assertTrue(all(metadata.intent for metadata in agent.tools.metadata()))
 
     def test_agent_owns_its_tool_registry(self):
         @tool(description="Find a career focus.")

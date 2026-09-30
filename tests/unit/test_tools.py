@@ -3,6 +3,7 @@ import unittest
 from astroweave.common.tools.base import (
     BaseToolReturnType,
     FunctionTool,
+    PromptTool,
     ToolType,
     tool,
 )
@@ -66,6 +67,30 @@ class ToolTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "already registered"):
             ToolRegistry([first, second])
+
+    def test_prompt_tool_is_intent_tagged_and_not_executable(self):
+        prompt_tool = PromptTool(
+            "promotion_analysis",
+            "salaried_employment",
+            "Assess promotion indicators from supplied chart data.",
+        )
+
+        self.assertEqual(prompt_tool.metadata.type, ToolType.PROMPT)
+        self.assertEqual(prompt_tool.metadata.intent, "salaried_employment")
+        self.assertIsNone(prompt_tool.metadata.returns)
+        with self.assertRaisesRegex(RuntimeError, "cannot be invoked"):
+            prompt_tool.invoke()
+
+    def test_registry_filters_tools_for_multiple_intents(self):
+        promotion = PromptTool("promotion", "salaried", "Assess promotion indicators.")
+        business = PromptTool("business", "business", "Assess venture indicators.")
+        registry = ToolRegistry([promotion, business])
+
+        self.assertEqual(
+            [item.name for item in registry.metadata_for_intents(["business", "salaried"])],
+            ["promotion", "business"],
+        )
+        self.assertEqual(set(registry.grouped_metadata()), {"salaried", "business"})
 
 
 if __name__ == "__main__":
