@@ -61,7 +61,7 @@ For a question such as *“Will I get a new job this year?”*, AstroWeave can i
 - LangChain
 - Large language models
 - Retrieval and knowledge bases
-- Tool-based agent execution
+- Tool contracts and per-agent registries (LLM-directed tool execution is not wired yet)
 
 ## Current Status
 
@@ -81,6 +81,10 @@ The fuller implementation snapshot and roadmap are published in the
 For the complete functional behavior, architecture, API and state contracts,
 security assessment, operations guide, and implementation roadmap, see the
 [project documentation](docs/PROJECT_DOCUMENTATION.md).
+
+For a beginner-first walkthrough of the codebase and the exact difference
+between registered tools, Python function calls, and LLM-directed tool
+execution, see the [beginner's guide](docs/BEGINNER_GUIDE.md).
 
 ## Local Development
 

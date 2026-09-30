@@ -22,6 +22,10 @@ This document distinguishes among:
 When this document conflicts with the source code, the source code is the
 runtime authority and this document must be corrected in the same change.
 
+Readers new to Python, agents, and the project can start with the
+[beginner's guide](BEGINNER_GUIDE.md), which explains the runtime handoffs and
+the current tool-execution boundary in plain language.
+
 ## 2. Product Overview
 
 AstroWeave is a hierarchical, multi-agent astrology application. A user asks a
@@ -420,7 +424,10 @@ catalog:
 - Duplicate agent names raise `ValueError` rather than silently replacing an
   existing definition.
 - `SPECIALIST_REGISTRY` contains the `career`, `finance`, `love`, and `sports`
-  definitions. Each currently owns an independent empty tool registry.
+  definitions. Each owns an independent registry of prompt-only intent
+  descriptions (12 entries grouped into four intents per specialist). These
+  entries are not executable Python functions, and the current specialist
+  executor does not read the registries.
 
 The registry replaces the former `SPECIALIST_PROMPTS` dictionary. This keeps
 the prompt and future agent-specific capabilities in one definition, gives the
@@ -434,10 +441,11 @@ special-case imports or conditionals as specialists gain different tools.
 | Type | Purpose |
 |---|---|
 | `BaseToolReturnType` | Pydantic base response with `success: bool` and optional `error: str` |
-| `ToolType` | String enum; currently contains only `function` |
+| `ToolType` | String enum distinguishing executable `function` wrappers from descriptive `prompt` tools |
 | `ToolMetadata` | Pydantic metadata with `name`, `description`, `type`, and `returns` |
 | `BaseTool` | Abstract contract requiring `metadata` and `invoke()` |
 | `FunctionTool` | Callable adapter around a normal Python function |
+| `PromptTool` | Descriptive prompt/intent metadata whose `invoke()` deliberately raises an error |
 | `tool()` | Decorator that creates a `FunctionTool` from a function |
 
 `ToolMetadata.returns` stores the response model class, not a response
@@ -478,6 +486,10 @@ remain future work. The existing chart client also remains an orchestrator
 dependency rather than being decorated as an agent tool because chart loading
 currently happens once before specialist invocation and is reused through
 shared state.
+
+For a plain-language, detailed walkthrough of how direct function calls,
+LangGraph graph invocation, LangChain model invocation, and a future LLM-driven
+tool loop differ, see the [beginner's guide](BEGINNER_GUIDE.md).
 
 ## 8. Shared State and Runtime Context
 
