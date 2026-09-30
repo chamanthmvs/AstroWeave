@@ -1,10 +1,12 @@
-# AstroWeave: A Beginner's Guide to the Code and Tool Handoffs
+# 06. Tools and Handoffs: From a Python Function to an Agent Capability
 
-**Audience:** Someone who is new to programming, Python, AI agents, and this repository  
-**Purpose:** Explain what the application does, how its pieces pass work to each other, and exactly what does (and does not) happen when a tool is mentioned.  
+[Book home](ASTROWEAVE_BOOK.md) | Previous: [05. LLM Calls and Prompts](book/05-llms-and-prompts.md) | Next: [07. Chart Service and HTTP](book/07-chart-service.md)
+
+**Audience:** Someone who is new to programming, Python, AI agents, and this repository
+**Purpose:** Explain the tool contracts and registries, direct Python calls, and what does (and does not) happen when an LLM is expected to call a tool.
 **Status:** Explanatory guide to the implementation currently in the repository. Source code is the final authority if it changes.
 
-This is intentionally a long read. You do not need to understand every section at once. The short answer and runtime walkthrough are the best starting points; the later sections zoom in on Python and tool mechanics.
+This is chapter 06 of the [AstroWeave beginner's book](ASTROWEAVE_BOOK.md). Read chapters 01–05 first for the system map, request lifecycle, Python syntax, graph behavior, and LLM calls; then return here for tool details.
 
 ## 1. The Short, Important Answer
 
@@ -449,28 +451,36 @@ A useful debugging question is “What exact Python line calls this object?” I
 
 ## 16. Quick Questions and Answers
 
-**If a tool is a function, why not just call `a()`?**  
+**If a tool is a function, why not just call `a()`?**
+
 That is exactly how ordinary Python calls a function. A `FunctionTool` also supports parentheses because its `__call__` method forwards to `invoke()`. What is missing is not Python's ability to call it; it is the model-to-application relay that would decide *which* registered function to call and with *which* arguments.
 
-**Does the model call Python?**  
+**Does the model call Python?**
+
 No. The model sends a response to the application. The application's Python code may interpret a structured part of that response as a request and call an approved function. AstroWeave's current specialist execution path does not implement that interpretation for its registered tools.
 
-**Does LangChain call the tool?**  
+**Does LangChain call the tool?**
+
 Not in the code path described here. LangChain wraps chat models and messages. Tool calling requires explicit binding/execution code or a graph path that handles tool calls.
 
-**Does LangGraph call the tool?**  
+**Does LangGraph call the tool?**
+
 LangGraph calls the Python node functions that were added to its graph. The current specialist graph has no tool-execution node or model-tool loop. It does call the specialist executor node, which calls the LLM.
 
-**Is the chart service a tool?**  
+**Is the chart service a tool?**
+
 In a broad architectural sense, it is an application capability. In the precise runtime sense, the dispatcher directly calls a Python HTTP client; the LLM does not request that action.
 
-**Are career tools empty?**  
+**Are career tools empty?**
+
 No. The career registry contains twelve `PromptTool` entries grouped by four intents. They are not Python functions, and the current specialist executor does not use the registry entries. The other specialist registries use the same prompt-only pattern.
 
-**What does “invoke” mean?**  
+**What does “invoke” mean?**
+
 It depends on the object. `graph.invoke(...)` runs a LangGraph workflow. `llm.invoke(...)` requests a model response. `function_tool.invoke(...)` runs a wrapped Python function. Same method name, three different objects and jobs.
 
-**What does the decorator do?**  
+**What does the decorator do?**
+
 It turns a plain function into a callable wrapper that stores metadata and checks its return model. It does not connect the function to an LLM.
 
 ## 17. A Reliable Summary to Keep in Mind
@@ -481,3 +491,7 @@ There are two separate decisions:
 2. **Who chooses which function to call?** In the current registered specialist tools, nobody: the model is not shown those tools and the execution loop is absent. In a future tool-enabled path, the model could request a named action, but Python must validate and execute that request.
 
 That separation is the key to understanding AstroWeave's current tool handoff. The function is ordinary Python. The framework supplies useful workflow and model abstractions. The application code must explicitly connect model requests to safe function calls, and that connection is not yet present for specialist tools.
+
+## Continue
+
+Next: [07. Chart Service and HTTP](book/07-chart-service.md). Return to the [book home](ASTROWEAVE_BOOK.md) for the full chapter list.
