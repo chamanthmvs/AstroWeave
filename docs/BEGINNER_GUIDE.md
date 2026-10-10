@@ -432,7 +432,7 @@ A useful debugging question is “What exact Python line calls this object?” I
 
 | Area | What to read it for |
 |---|---|
-| `app/streamlit_app.py` | User-facing forms and request submission. |
+| `frontend/` (`app.js`) | User-facing single-page web UI: forms, chat, and request submission. |
 | `src/astroweave/api/main.py` | HTTP routes, authentication boundary, request orchestration, and persistence. |
 | `src/astroweave/graphs/orchestrator/orchestrator_graph.py` | Request classification, dependency planning, stage execution, and synthesis. |
 | `src/astroweave/orchestration/dispatcher/dispatcher.py` | Chart retrieval and local/remote specialist handoff. |

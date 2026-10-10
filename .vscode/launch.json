@@ -1,0 +1,37 @@
+{
+  // One-click run/debug. Open the "Run and Debug" panel (⇧⌘D), pick
+  // "▶ AstroWeave: all services" from the dropdown, and press the green play
+  // button to start the chart service and the backend API together.
+  // The backend auto-loads .env.development from the workspace root.
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Chart service (:8100)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["main:app", "--port", "8100"],
+      "cwd": "${workspaceFolder}/chart_service",
+      "python": "${workspaceFolder}/chart_service/.venv/bin/python",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Backend API + web UI (:8000)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "uvicorn",
+      "args": ["astroweave.api.main:app", "--port", "8000"],
+      "cwd": "${workspaceFolder}",
+      "python": "${workspaceFolder}/.venv/bin/python",
+      "console": "integratedTerminal"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "▶ AstroWeave: all services",
+      "configurations": ["Chart service (:8100)", "Backend API + web UI (:8000)"],
+      "stopAll": true,
+      "presentation": { "group": "astroweave", "order": 1 }
+    }
+  ]
+}

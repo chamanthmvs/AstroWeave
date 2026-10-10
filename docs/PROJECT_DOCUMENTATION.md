@@ -1066,8 +1066,11 @@ required when validating multi-specialist execution deterministically.
 
 ```bash
 python -m venv .venv
-.venv/bin/pip install -r requirements.txt pytest
+.venv/bin/pip install -e ".[dev]"
 ```
+
+The project installs as two top-level packages (`astroweave` from `src/` and
+`app` at the repo root), so there is no `PYTHONPATH` to set once installed.
 
 Configure a local ignored environment file or export variables:
 
@@ -1095,20 +1098,16 @@ python -m venv .venv
 From the repository root:
 
 ```bash
-PYTHONPATH=src .venv/bin/uvicorn astroweave.api.main:app \
+.venv/bin/uvicorn astroweave.api.main:app \
   --host 127.0.0.1 --port 8000
 ```
 
-### 17.4 Streamlit UI
+### 17.4 Web UI
 
-```bash
-.venv/bin/streamlit run app/streamlit_app.py \
-  --server.headless true --server.address 127.0.0.1 --server.port 8501
-```
-
-The UI uses `ASTROWEAVE_API_URL` (default `http://127.0.0.1:8000`) for
-registration and sign-in before the sidebar is available. The sidebar API URL
-setting applies after sign-in.
+The backend serves a dependency-free single-page app (`frontend/`) from the same
+origin at `http://127.0.0.1:8000/`. Open that URL in a browser once the API and
+chart service are running — there is nothing separate to start, and no CORS
+configuration because the UI and API share an origin.
 
 ### 17.5 Optional Specialist Process
 
@@ -1116,7 +1115,7 @@ From the repository root, start a specialist HTTP process with the same LLM
 configuration and `ASTROWEAVE_AUTH_SECRET` as the connector:
 
 ```bash
-PYTHONPATH=src .venv/bin/uvicorn astroweave.specialist_service:app \
+.venv/bin/uvicorn astroweave.specialist_service:app \
   --host 127.0.0.1 --port 8200
 ```
 
@@ -1131,13 +1130,12 @@ exposes the same registry routes.
 ```bash
 curl http://127.0.0.1:8100/health
 curl http://127.0.0.1:8000/health
-curl http://127.0.0.1:8501/
 ```
 
 ### 17.7 Tests
 
 ```bash
-PYTHONPATH=src .venv/bin/python -m pytest -q
+.venv/bin/python -m pytest -q
 ```
 
 ## 18. Configuration Reference

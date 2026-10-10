@@ -23,7 +23,7 @@ flowchart LR
 
 Recommended order:
 
-1. `app/streamlit_app.py`: locate the form submission and API request.
+1. `frontend/app.js`: locate the form submission and the `fetch` to `/run`.
 2. `src/astroweave/api/main.py`: locate `RunRequest`, authentication dependency, and `run(...)`.
 3. `src/astroweave/graphs/orchestrator/orchestrator_graph.py`: find graph assembly and node implementations.
 4. `src/astroweave/orchestration/dispatcher/dispatcher.py`: follow chart retrieval and specialist handoff.

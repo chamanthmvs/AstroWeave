@@ -1,0 +1,58 @@
+{
+  // Non-debug way to spin everything up. Run "▶ AstroWeave: all services"
+  // (Terminal → Run Task…, or ⌘⇧B since it is the default build task) to start
+  // the chart service and the hot-reloading backend API in parallel terminals.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Chart service (:8100)",
+      "type": "shell",
+      "command": "${workspaceFolder}/chart_service/.venv/bin/uvicorn",
+      "args": ["main:app", "--port", "8100"],
+      "options": { "cwd": "${workspaceFolder}/chart_service" },
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": { "regexp": "^$" },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".",
+          "endsPattern": "Application startup complete|Uvicorn running"
+        }
+      },
+      "presentation": { "group": "astroweave", "panel": "dedicated" }
+    },
+    {
+      "label": "Backend API + web UI (:8000)",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/bin/uvicorn",
+      "args": ["astroweave.api.main:app", "--reload", "--port", "8000"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": { "regexp": "^$" },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".",
+          "endsPattern": "Application startup complete|Uvicorn running"
+        }
+      },
+      "presentation": { "group": "astroweave", "panel": "dedicated" }
+    },
+    {
+      "label": "▶ AstroWeave: all services",
+      "dependsOn": ["Chart service (:8100)", "Backend API + web UI (:8000)"],
+      "dependsOrder": "parallel",
+      "problemMatcher": [],
+      "group": { "kind": "build", "isDefault": true }
+    },
+    {
+      "label": "Run tests",
+      "type": "shell",
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "args": ["-m", "pytest", "-q"],
+      "options": { "cwd": "${workspaceFolder}" },
+      "problemMatcher": [],
+      "group": { "kind": "test", "isDefault": true }
+    }
+  ]
+}

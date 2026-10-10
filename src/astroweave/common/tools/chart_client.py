@@ -11,6 +11,13 @@ logger = get_logger(__name__)
 CHART_SERVICE_URL = os.environ.get("ASTROWEAVE_CHART_SERVICE_URL", "http://127.0.0.1:8100")
 
 
+class ChartServiceUnavailable(RuntimeError):
+    """Raised when the chart_service cannot be reached (down, unreachable, or
+    timed out). This is a transport failure, not a bad-request/computation
+    error, so callers can surface it as an HTTP 503 rather than a soft
+    "could not compute a chart" message."""
+
+
 def get_birth_chart(
     date: str,
     time: str,
@@ -47,6 +54,15 @@ def get_birth_chart(
         "include_ashtakavarga": include_ashtakavarga,
     }
     logger.info("Requesting chart from chart_service date=%s time=%s", date, time)
-    response = httpx.post(f"{CHART_SERVICE_URL.rstrip('/')}/chart", json=payload, timeout=timeout)
+    try:
+        response = httpx.post(f"{CHART_SERVICE_URL.rstrip('/')}/chart", json=payload, timeout=timeout)
+    except httpx.TransportError as error:
+        # Connection refused, DNS failure, timeout, etc. — the service is down
+        # or unreachable. Distinct from a bad response, which we let through.
+        logger.error("chart_service unreachable at %s: %s", CHART_SERVICE_URL, error)
+        raise ChartServiceUnavailable(
+            f"The chart service at {CHART_SERVICE_URL} is unreachable. "
+            "Start it with: cd chart_service && uvicorn main:app --port 8100"
+        ) from error
     response.raise_for_status()
     return response.json()

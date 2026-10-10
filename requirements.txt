@@ -1,16 +1,9 @@
-fastapi
-httpx
-langgraph
-pydantic>=2,<3
-streamlit
-uvicorn
-python-dotenv
-geopy
-certifi
-
-# LLM providers used by astroweave.common.llm (install only what you use;
-# providers are looked up lazily, so unused ones don't need to be installed)
-# "groq" reuses ChatOpenAI against Groq's OpenAI-compatible endpoint, so it
-# needs langchain-openai too - set GROQ_API_KEY in a local .env or the env.
-langchain-openai
-# langchain-anthropic
+# Dependencies are declared in pyproject.toml. This file is a convenience
+# bridge so `pip install -r requirements.txt` keeps working — it performs an
+# editable install of the project (and thus all runtime dependencies).
+#
+#   pip install -r requirements.txt            # runtime
+#   pip install -e ".[dev]"                     # runtime + test tooling
+#
+# The chart service has its own dependencies in chart_service/requirements.txt.
+-e .

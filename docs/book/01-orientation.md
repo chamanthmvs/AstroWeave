@@ -79,7 +79,8 @@ AstroWeave/
 
 ### What the main folders mean
 
-- `app/` is the interface and account-facing side. `streamlit_app.py` builds the UI; `auth.py` owns SQLite user/password operations; `geocoding.py` turns a place name into coordinates.
+- `app/` is the account-facing side. `auth.py` owns SQLite user/password operations; `geocoding.py` turns a place name into coordinates.
+- `frontend/` is the web UI: a dependency-free single-page app served by the backend at `/` (it replaced the earlier Streamlit UI).
 - `chart_service/` is deliberately separated from the main app. Its dependencies include PyJHora; the main app communicates with it over HTTP rather than importing its calculation package.
 - `src/astroweave/api/` is the HTTP boundary. It validates request bodies, authenticates, loads conversation context, runs the graph, persists the answer, and serializes a response.
 - `src/astroweave/graphs/` contains workflows: named node functions connected through LangGraph.

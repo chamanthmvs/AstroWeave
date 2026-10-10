@@ -1,0 +1,41 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "astroweave"
+version = "0.2.0"
+description = "Hierarchical multi-agent astrology system built with LangGraph."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "httpx",
+    "langgraph",
+    "langchain-openai",   # also used for Groq via its OpenAI-compatible endpoint
+    "pydantic>=2,<3",
+    "python-dotenv",
+    "geopy",
+    "certifi",
+]
+
+[project.optional-dependencies]
+# Install with: pip install -e ".[dev]"
+dev = ["pytest"]
+# Optional LLM provider; only needed if ASTROWEAVE_LLM_PROVIDER=anthropic.
+anthropic = ["langchain-anthropic"]
+
+[tool.setuptools.packages.find]
+# Two top-level packages: the `astroweave` library under src/, and the
+# account-facing `app` package at the repo root. `include` keeps `tests`,
+# `chart_service`, etc. out of the installed distribution.
+where = ["src", "."]
+include = ["astroweave*", "app*"]
+namespaces = false
+
+[tool.pytest.ini_options]
+# Lets `pytest` run straight from a checkout even without `pip install -e .`
+# (CI installs the package; this keeps local runs frictionless).
+pythonpath = ["src", "."]
+testpaths = ["tests"]

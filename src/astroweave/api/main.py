@@ -1,13 +1,17 @@
 import hashlib
 import json
 import os
+from pathlib import Path
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from langgraph.runtime import Runtime
 from pydantic import BaseModel, Field
 
 from app import auth
+from app import geocoding
 from astroweave.agents.specialists import SPECIALIST_REGISTRY
 from astroweave.common.config import get_logger
 from astroweave.common.conversation import (
@@ -17,6 +21,7 @@ from astroweave.common.conversation import (
     ConversationStore,
 )
 from astroweave.common.security import create_user_token, verify_user_token
+from astroweave.common.tools.chart_client import ChartServiceUnavailable
 from astroweave.graphs.orchestrator.orchestrator_graph import build_orchestrator_graph
 from astroweave.orchestration.dispatcher.dispatcher import execute_specialist
 
@@ -143,6 +148,21 @@ def _direct_specialist(app_id: str | None) -> str | None:
 def health() -> dict[str, str]:
     logger.debug("Health check requested")
     return {"status": "ok", "service": "astroweave-api"}
+
+
+@app.get("/geocode")
+def geocode(place: str = Query(..., min_length=1, max_length=256)) -> dict[str, object]:
+    """Resolve an Indian place name to coordinates for the registration form."""
+    try:
+        location = geocoding.geocode_indian_place(place)
+    except geocoding.GeocodingServiceError as error:
+        raise HTTPException(status_code=503, detail=str(error)) from error
+    if location is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Could not find that place in India. Try a nearby city name.",
+        )
+    return {**location, "utc_offset_hours": geocoding.INDIA_UTC_OFFSET_HOURS}
 
 
 @app.get("/conversations")
@@ -301,6 +321,13 @@ def run(
             status_code=status.HTTP_403_FORBIDDEN,
             detail=str(error),
         ) from error
+    except ChartServiceUnavailable as error:
+        _conversation_store.release_request(request.message_id, request_claim_token)
+        logger.error("Chart service unavailable during run: %s", error)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"code": "chart_service_unavailable", "message": str(error)},
+        ) from error
     except Exception as error:  # noqa: BLE001 - surface as a clean 502 instead of a 500 traceback
         _conversation_store.release_request(request.message_id, request_claim_token)
         logger.exception("Orchestrator run failed")
@@ -314,5 +341,44 @@ def run(
         "conversation_id": conversation_id,
         "session_id": session_id,
         "state": final_state,
-        "execution_trace": [],
+        "execution_trace": _execution_trace(final_state),
     }
+
+
+def _execution_trace(state: dict) -> list[dict]:
+    """Summarise what the orchestrator actually did, for UI and observability.
+
+    Derived from the final graph state: which specialists were planned, what
+    each one concluded, and any errors that surfaced along the way.
+    """
+    trace: list[dict] = []
+    specialists = state.get("specialists") or []
+    if specialists:
+        trace.append({
+            "step": "plan",
+            "methodology": state.get("methodology"),
+            "specialists": specialists,
+        })
+    for result in state.get("specialist_results") or []:
+        trace.append({
+            "step": "specialist",
+            "specialist": result.get("specialist"),
+            "confidence": result.get("confidence"),
+            "conclusion": result.get("conclusion"),
+        })
+    for message in state.get("errors") or []:
+        trace.append({"step": "error", "message": message})
+    return trace
+
+
+# --- Static single-page frontend -------------------------------------------
+# The SPA lives in <repo>/frontend and is served from the same origin as the
+# API, so the browser needs no CORS configuration. Mounting is guarded so the
+# API (and its tests) still boot when the frontend directory is absent.
+_FRONTEND_DIR = Path(__file__).resolve().parents[3] / "frontend"
+if _FRONTEND_DIR.is_dir():
+    app.mount("/static", StaticFiles(directory=_FRONTEND_DIR), name="static")
+
+    @app.get("/", include_in_schema=False)
+    def spa_index() -> FileResponse:
+        return FileResponse(_FRONTEND_DIR / "index.html")

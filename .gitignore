@@ -23,8 +23,13 @@ htmlcov/
 .env.*
 
 .DS_Store
-.vscode/
 .idea/
+
+# Keep shared run/debug configs, but ignore per-user VS Code settings.
+.vscode/*
+!.vscode/launch.json
+!.vscode/tasks.json
+!.vscode/extensions.json
 
 # Local account records contain password hashes and should not be committed.
 app/data/users.json
@@ -32,3 +37,4 @@ app/data/astroweave.db
 
 # Agent-oriented project context notes (not for the repo history).
 PROJECT_CONTEXT.md
+CLAUDE.md

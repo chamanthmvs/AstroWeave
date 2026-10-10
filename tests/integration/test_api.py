@@ -116,6 +116,58 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 502)
         self.assertIn("chart service unreachable", response.json()["detail"])
 
+    @patch("astroweave.api.main._orchestrator_graph")
+    @patch("astroweave.api.main._conversation_store")
+    def test_run_returns_503_when_chart_service_is_unavailable(self, mock_store, mock_graph):
+        from astroweave.common.tools.chart_client import ChartServiceUnavailable
+
+        mock_store.request_ids.return_value = None
+        mock_store.load_context_messages.return_value = ([], [])
+        mock_store.claim_request.return_value = ("claim-token", None)
+        mock_graph.invoke.side_effect = ChartServiceUnavailable("chart service is down")
+
+        response = self.client.post(
+            "/run",
+            json={"query": "Will I get a new job this year?", "username": "demo-user"},
+            headers=self._headers(),
+        )
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["detail"]["code"], "chart_service_unavailable")
+        # A failed run must release its claim so a retry is not rejected as in-progress.
+        mock_store.release_request.assert_called_once()
+
+    @patch("astroweave.api.main._orchestrator_graph")
+    @patch("astroweave.api.main._conversation_store")
+    def test_run_includes_an_execution_trace(self, mock_store, mock_graph):
+        mock_store.request_ids.return_value = None
+        mock_store.load_context_messages.return_value = ([], [])
+        mock_store.claim_request.return_value = ("claim-token", None)
+        mock_graph.invoke.return_value = {
+            "answer": "Steady progress ahead.",
+            "methodology": "both",
+            "specialists": ["career", "finance"],
+            "specialist_results": [
+                {"specialist": "career", "analysis": "…", "conclusion": "Promotion likely.", "confidence": "high"},
+                {"specialist": "finance", "analysis": "…", "conclusion": "Gains likely.", "confidence": "medium"},
+            ],
+            "errors": [],
+        }
+
+        response = self.client.post(
+            "/run",
+            json={"query": "Career and finances this year?", "username": "demo-user"},
+            headers=self._headers(),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        trace = response.json()["execution_trace"]
+        self.assertEqual(trace[0]["step"], "plan")
+        self.assertEqual(trace[0]["specialists"], ["career", "finance"])
+        specialist_steps = [step for step in trace if step["step"] == "specialist"]
+        self.assertEqual([step["specialist"] for step in specialist_steps], ["career", "finance"])
+        self.assertEqual(specialist_steps[0]["conclusion"], "Promotion likely.")
+
     def test_run_requires_query(self):
         response = self.client.post(
             "/run",

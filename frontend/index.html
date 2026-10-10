@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en" data-theme="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AstroWeave</title>
+  <meta name="description" content="Personal astrology workspace — specialist astrology, thoughtfully coordinated." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/static/styles.css" />
+  <script>
+    /* Apply the saved theme before first paint to avoid a flash. */
+    (function () {
+      try {
+        var t = localStorage.getItem("astroweave:theme");
+        if (t === "light" || t === "dark") document.documentElement.setAttribute("data-theme", t);
+      } catch (e) {}
+    })();
+  </script>
+</head>
+<body>
+  <!-- ===== Auth view ===== -->
+  <div id="auth-view" class="auth-wrap hidden">
+    <div class="auth-card">
+      <div class="auth-top">
+        <div class="brand"><span class="brand-mark" aria-hidden="true"></span> AstroWeave</div>
+        <button class="icon-btn" data-theme-toggle title="Toggle light / dark">🌙</button>
+      </div>
+      <div class="eyebrow" style="margin-top:1rem">Specialist astrology, thoughtfully coordinated</div>
+      <h1>Your questions, read from every angle.</h1>
+
+      <div class="tabs">
+        <button class="tab active" data-auth-tab="signin">Sign in</button>
+        <button class="tab" data-auth-tab="register">Register</button>
+      </div>
+
+      <!-- Sign in -->
+      <form id="signin-form">
+        <label class="field">
+          <span class="field-label">Email</span>
+          <input type="email" name="email" autocomplete="email" placeholder="you@example.com" required />
+        </label>
+        <label class="field">
+          <span class="field-label">Password</span>
+          <input type="password" name="password" autocomplete="current-password" placeholder="Your password" required />
+        </label>
+        <button type="submit" class="btn-primary" style="width:100%">Continue</button>
+        <div class="error-text" data-error></div>
+      </form>
+
+      <!-- Register -->
+      <form id="register-form" class="hidden">
+        <label class="field">
+          <span class="field-label">Your name</span>
+          <input name="name" placeholder="e.g. Maya Patel" required />
+        </label>
+        <div class="row-2">
+          <label class="field">
+            <span class="field-label">Email</span>
+            <input type="email" name="email" autocomplete="email" placeholder="you@example.com" required />
+          </label>
+          <label class="field">
+            <span class="field-label">Password</span>
+            <input type="password" name="password" autocomplete="new-password" placeholder="At least 8 characters" required />
+          </label>
+        </div>
+
+        <div class="section-label">Birth details</div>
+        <div class="row-2">
+          <label class="field">
+            <span class="field-label">Birth date</span>
+            <input type="date" name="date" min="1900-01-01" required />
+          </label>
+          <label class="field">
+            <span class="field-label">Birth time</span>
+            <input type="time" name="time" step="1" required />
+          </label>
+        </div>
+        <div class="geo-row">
+          <label class="field">
+            <span class="field-label">Birth place (India)</span>
+            <input name="place" placeholder="e.g. Chennai, India" />
+          </label>
+          <button type="button" class="btn-ghost" data-geocode>Find</button>
+        </div>
+        <div class="geo-result" data-geo-result></div>
+
+        <button type="submit" class="btn-primary" style="width:100%;margin-top:1rem" disabled>Create account</button>
+        <p class="note" style="margin-top:0.8rem">Birth details are fixed at registration and used for every reading.</p>
+        <div class="error-text" data-error></div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===== App view ===== -->
+  <div id="app-view" class="app hidden">
+    <div class="scrim hidden" data-scrim></div>
+
+    <aside class="sidebar">
+      <div class="sidebar-head">
+        <div class="brand"><span class="brand-mark" aria-hidden="true"></span> AstroWeave</div>
+        <button class="icon-btn" data-theme-toggle title="Toggle light / dark">🌙</button>
+      </div>
+
+      <button class="btn-ghost" data-new-convo style="width:100%">＋ New conversation</button>
+
+      <div class="section-label" style="margin:0">Recent</div>
+      <div class="convo-list" data-convo-list>
+        <p class="note" style="padding:0.4rem 0.6rem">No conversations yet.</p>
+      </div>
+
+      <div class="sidebar-user">
+        <div class="avatar" data-avatar>··</div>
+        <div class="user-meta">
+          <div class="user-name" data-user-name>—</div>
+          <div class="user-email" data-user-email>—</div>
+        </div>
+        <button class="icon-btn" data-signout title="Sign out">⎋</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="main-head">
+        <button class="icon-btn menu-btn" data-menu style="margin-bottom:0.3rem">☰</button>
+        <div class="eyebrow">Personal astrology workspace</div>
+        <h2>Make room for the answer.</h2>
+        <p class="intro">Ask one clear question. AstroWeave coordinates the right specialists and methodologies, then brings the signal back to you.</p>
+      </div>
+
+      <div class="banner hidden" data-banner></div>
+
+      <div class="thread" data-thread>
+        <div class="empty" data-empty>
+          <div class="big">What's on your mind?</div>
+          <div>Ask about your career, relationships, finances, or the next chapter — the specialists will weigh in.</div>
+        </div>
+      </div>
+
+      <div class="composer">
+        <div class="composer-inner">
+          <form data-run-form>
+            <div class="composer-row">
+              <textarea name="query" placeholder="Ask your astrology question…" required></textarea>
+              <button type="submit" class="btn-primary" data-send>Ask →</button>
+            </div>
+            <div class="composer-bar">
+              <select name="methodology" aria-label="Methodology">
+                <option>Let the system decide</option>
+                <option>Vedic</option>
+                <option>KP</option>
+                <option>Both</option>
+              </select>
+              <span class="hint">Enter to send · Shift+Enter for a new line</span>
+            </div>
+          </form>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Markdown rendering + sanitising for AI answers -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

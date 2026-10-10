@@ -48,16 +48,18 @@ When patching an imported function, patch the name where the code under test loo
 The repository tests use `unittest.TestCase` style and can run with Python's built-in test runner. From the project root:
 
 ```bash
-PYTHONPATH=src python -m unittest tests.unit.test_tools tests.unit.test_agent_registry
+python -m unittest tests.unit.test_tools tests.unit.test_agent_registry
 ```
 
 Run the whole unit/integration test package with:
 
 ```bash
-PYTHONPATH=src python -m unittest discover -s tests
+python -m unittest discover -s tests
 ```
 
-The `pytest` command may also be used if pytest is installed, but it is not a runtime dependency in the core requirements by default. Use the project's active virtual environment/interpreter if one is configured.
+(After `pip install -e ".[dev]"` there is no `PYTHONPATH` to set.) The `pytest`
+command is the usual way to run everything — `pytest -q` — and is included in
+the `dev` extra.
 
 A normal development sequence is:
 
@@ -80,13 +82,10 @@ The README contains the current install/start commands. A common shape is:
 
 ```bash
 # Main app dependencies (use a virtual environment)
-pip install -r requirements.txt
+pip install -e ".[dev]"
 
-# Connector API
-PYTHONPATH=src uvicorn astroweave.api.main:app --reload --port 8000
-
-# In another terminal: UI
-streamlit run app/streamlit_app.py
+# Connector API + web UI (the SPA is served at http://127.0.0.1:8000/)
+uvicorn astroweave.api.main:app --reload --port 8000
 
 # In another environment/terminal: chart service
 cd chart_service

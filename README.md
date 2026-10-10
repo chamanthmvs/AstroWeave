@@ -89,11 +89,12 @@ LLM-directed tool execution.
 
 ## Local Development
 
-Install the root dependencies, configure an LLM provider with environment
-variables, then run the backend and UI in separate terminals:
+Install the project (editable), configure an LLM provider with environment
+variables, then run the backend in one terminal and the chart service in
+another. The package is installable, so there is no `PYTHONPATH` to set:
 
 ```bash
-pip install -r requirements.txt
+pip install -e ".[dev]"          # runtime deps + pytest; or `pip install -r requirements.txt`
 export ASTROWEAVE_LLM_PROVIDER=groq
 export ASTROWEAVE_LLM_MAX_TOKENS=4096
 export ASTROWEAVE_SESSION_HISTORY_LIMIT=12
@@ -101,19 +102,28 @@ export ASTROWEAVE_CONVERSATION_HISTORY_LIMIT=8
 export ASTROWEAVE_REQUEST_CLAIM_TTL_SECONDS=1800
 export ASTROWEAVE_AUTH_SECRET=replace-with-a-long-random-secret
 export GROQ_API_KEY=your_key_here
-PYTHONPATH=src uvicorn astroweave.api.main:app --reload
-streamlit run app/streamlit_app.py
+uvicorn astroweave.api.main:app --reload
 ```
+
+The backend serves a self-contained web UI (a dependency-free single-page app in
+`frontend/`, with a light/dark toggle) from the same origin at
+`http://127.0.0.1:8000/`. Open that in a browser once the chart service and
+backend are running.
+
+> **VS Code:** open the *Run and Debug* panel, choose **▶ AstroWeave: all
+> services**, and press play to launch the chart service and backend together
+> (configs live in `.vscode/`). Run tests with the **Run tests** task.
 
 The connector creates conversation/session IDs on the first request and returns
 them for follow-ups. For an optional direct career route, set
 `ASTROWEAVE_APP_ROUTES='{"career-app":"career"}'` on the connector and send
 `"app_id":"career-app"` to `/run`. To deploy career separately, run
-`PYTHONPATH=src uvicorn astroweave.specialist_service:app --port 8200` with a
+`uvicorn astroweave.specialist_service:app --port 8200` with a
 shared `ASTROWEAVE_AUTH_SECRET`, and configure the connector with
 `ASTROWEAVE_SPECIALIST_URLS='{"career":"http://127.0.0.1:8200"}'`.
 
-The `/run` endpoint also requires the chart service:
+The `/run` endpoint also requires the chart service (if it is unreachable,
+`/run` responds with a clear **HTTP 503** rather than a vague failure):
 
 ```bash
 cd chart_service
