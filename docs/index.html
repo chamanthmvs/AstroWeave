@@ -9,43 +9,43 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&family=Playfair+Display:wght@600;700&display=swap" rel="stylesheet">
   <style>
-    :root { --night:#08121e; --ink:#dce8e8; --muted:#8ca4a7; --line:rgba(165,208,204,.18); --mint:#9de1c2; --gold:#f4c878; --coral:#ef947c; --panel:rgba(18,42,54,.72); --mono:"DM Mono",monospace; --body:"Manrope",sans-serif; --display:"Playfair Display",serif; }
+    :root { --night:#0d1030; --ink:#e9e7f5; --muted:#9c98c6; --line:rgba(173,163,232,.18); --lilac:#a99cff; --gold:#e8b55c; --rose:#e39fb0; --panel:rgba(26,23,68,.6); --mono:"DM Mono",monospace; --body:"Manrope",sans-serif; --display:"Playfair Display",serif; }
     * { box-sizing:border-box; }
     html { scroll-behavior:smooth; }
     body { margin:0; color:var(--ink); background:var(--night); font-family:var(--body); line-height:1.65; }
-    body::before { position:fixed; inset:0; z-index:-2; content:""; opacity:.55; background-image:radial-gradient(circle at 12% 20%,rgba(157,225,194,.15) 0 1px,transparent 1.5px),radial-gradient(circle at 74% 34%,rgba(244,200,120,.2) 0 1px,transparent 1.5px),radial-gradient(circle at 42% 76%,rgba(239,148,124,.13) 0 1px,transparent 1.5px); background-size:180px 180px,230px 230px,310px 310px; }
-    body::after { position:fixed; inset:0; z-index:-1; content:""; background:linear-gradient(130deg,#08121e 0%,#0b1c2a 45%,#102b34 100%); opacity:.88; }
+    body::before { position:fixed; inset:0; z-index:-2; content:""; opacity:.55; background-image:radial-gradient(circle at 12% 20%,rgba(169,156,255,.15) 0 1px,transparent 1.5px),radial-gradient(circle at 74% 34%,rgba(232,181,92,.2) 0 1px,transparent 1.5px),radial-gradient(circle at 42% 76%,rgba(227,159,176,.13) 0 1px,transparent 1.5px); background-size:180px 180px,230px 230px,310px 310px; }
+    body::after { position:fixed; inset:0; z-index:-1; content:""; background:linear-gradient(130deg,#0d1030 0%,#141236 45%,#1a1744 100%); opacity:.88; }
     a { color:inherit; }
     .container { width:min(1120px,calc(100% - 40px)); margin:0 auto; }
     .eyebrow,.label { color:var(--gold); font:500 .72rem/1.2 var(--mono); letter-spacing:.14em; text-transform:uppercase; }
-    .site-header { border-bottom:1px solid var(--line); background:rgba(8,18,30,.72); backdrop-filter:blur(16px); }
+    .site-header { border-bottom:1px solid var(--line); background:rgba(13,16,48,.72); backdrop-filter:blur(16px); }
     .nav { display:flex; align-items:center; justify-content:space-between; min-height:72px; }
     .brand { display:flex; gap:12px; align-items:center; color:var(--ink); text-decoration:none; font-weight:800; }
-    .brand-mark { display:grid; width:34px; height:34px; place-items:center; border:1px solid var(--mint); border-radius:50%; color:var(--mint); font-family:var(--display); font-size:1.25rem; }
+    .brand-mark { display:grid; width:34px; height:34px; place-items:center; border:1px solid var(--lilac); border-radius:50%; color:var(--lilac); font-family:var(--display); font-size:1.25rem; }
     .nav-links { display:flex; gap:24px; color:var(--muted); font-size:.84rem; }
     .nav-links a { text-decoration:none; }
-    .nav-links a:hover { color:var(--mint); }
+    .nav-links a:hover { color:var(--lilac); }
     .hero { padding:112px 0 92px; position:relative; overflow:hidden; }
     .hero-grid { display:grid; grid-template-columns:1.05fr .95fr; gap:72px; align-items:center; }
     h1,h2,h3 { margin:0; line-height:1.1; }
     h1 { max-width:730px; margin-top:18px; font:700 clamp(3.5rem,8vw,7rem)/.94 var(--display); letter-spacing:-.045em; }
-    h1 em { color:var(--mint); font-style:normal; }
-    .hero-copy { max-width:620px; margin:28px 0 34px; color:#afc2c1; font-size:1.1rem; }
+    h1 em { color:var(--lilac); font-style:normal; }
+    .hero-copy { max-width:620px; margin:28px 0 34px; color:#c7c3e6; font-size:1.1rem; }
     .button-row { display:flex; flex-wrap:wrap; gap:12px; }
-    .button { display:inline-block; padding:11px 17px; border:1px solid var(--mint); color:var(--night); background:var(--mint); font-size:.85rem; font-weight:800; text-decoration:none; }
+    .button { display:inline-block; padding:11px 17px; border:1px solid var(--lilac); color:var(--night); background:var(--lilac); font-size:.85rem; font-weight:800; text-decoration:none; }
     .button.secondary { color:var(--ink); background:transparent; border-color:var(--line); }
     .hero-art { min-height:390px; position:relative; display:grid; place-items:center; }
-    .orbit { width:min(360px,75vw); aspect-ratio:1; position:relative; border:1px solid rgba(157,225,194,.32); border-radius:50%; transform:rotate(-18deg); }
-    .orbit::before,.orbit::after { position:absolute; content:""; inset:10%; border:1px solid rgba(244,200,120,.31); border-radius:50%; }
-    .orbit::after { inset:25%; border-color:rgba(239,148,124,.3); }
-    .core { width:116px; height:116px; display:grid; place-items:center; position:absolute; inset:0; margin:auto; border:1px solid var(--gold); border-radius:50%; color:var(--gold); background:#112b35; font:500 .66rem var(--mono); letter-spacing:.08em; text-align:center; text-transform:uppercase; }
-    .planet { position:absolute; width:15px; height:15px; border-radius:50%; background:var(--coral); box-shadow:0 0 22px rgba(239,148,124,.75); }
-    .planet.one { top:12%; left:28%; } .planet.two { right:4%; bottom:31%; background:var(--mint); box-shadow:0 0 22px rgba(157,225,194,.75); } .planet.three { left:18%; bottom:13%; width:9px; height:9px; background:var(--gold); }
+    .orbit { width:min(360px,75vw); aspect-ratio:1; position:relative; border:1px solid rgba(169,156,255,.32); border-radius:50%; transform:rotate(-18deg); }
+    .orbit::before,.orbit::after { position:absolute; content:""; inset:10%; border:1px solid rgba(232,181,92,.31); border-radius:50%; }
+    .orbit::after { inset:25%; border-color:rgba(227,159,176,.3); }
+    .core { width:116px; height:116px; display:grid; place-items:center; position:absolute; inset:0; margin:auto; border:1px solid var(--gold); border-radius:50%; color:var(--gold); background:#1c1850; font:500 .66rem var(--mono); letter-spacing:.08em; text-align:center; text-transform:uppercase; }
+    .planet { position:absolute; width:15px; height:15px; border-radius:50%; background:var(--rose); box-shadow:0 0 22px rgba(227,159,176,.75); }
+    .planet.one { top:12%; left:28%; } .planet.two { right:4%; bottom:31%; background:var(--lilac); box-shadow:0 0 22px rgba(169,156,255,.75); } .planet.three { left:18%; bottom:13%; width:9px; height:9px; background:var(--gold); }
     .orbit-caption { position:absolute; right:5%; bottom:4%; color:var(--muted); font:.68rem var(--mono); letter-spacing:.08em; text-transform:uppercase; }
     section { padding:96px 0; border-top:1px solid var(--line); }
     .section-heading { display:grid; grid-template-columns:.7fr 1.3fr; gap:40px; margin-bottom:46px; }
     h2 { font:600 clamp(2rem,4vw,3.4rem)/1 var(--display); letter-spacing:-.03em; }
-    h3 { margin-bottom:12px; font-size:1.08rem; color:var(--mint); }
+    h3 { margin-bottom:12px; font-size:1.08rem; color:var(--lilac); }
     p { margin:0; color:var(--muted); }
     .lead { max-width:680px; font-size:1.08rem; }
     .cards { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
@@ -58,19 +58,19 @@
     .detail-card h3 { margin-bottom:12px; }
     .detail-card p + p { margin-top:12px; }
     .detail-card code { color:var(--gold); font:500 .8rem var(--mono); }
-    .diagram { padding:28px; overflow-x:auto; border:1px solid var(--line); background:rgba(8,18,30,.55); }
-    pre { margin:0; color:#b8d5ca; font:.8rem/1.65 var(--mono); white-space:pre; }
+    .diagram { padding:28px; overflow-x:auto; border:1px solid var(--line); background:rgba(13,16,48,.55); }
+    pre { margin:0; color:#cfc9f0; font:.8rem/1.65 var(--mono); white-space:pre; }
     .flow { display:flex; flex-wrap:wrap; align-items:stretch; gap:8px; margin-top:26px; }
-    .flow-step { flex:1 1 130px; padding:16px; border-left:2px solid var(--mint); background:rgba(18,42,54,.72); }
+    .flow-step { flex:1 1 130px; padding:16px; border-left:2px solid var(--lilac); background:rgba(26,23,68,.72); }
     .flow-step strong { display:block; margin-bottom:4px; color:var(--ink); font-size:.85rem; }
     .flow-step span { color:var(--muted); font-size:.74rem; }
-    .methodology .card:first-child { border-color:rgba(157,225,194,.42); }
-    .methodology .card:last-child { border-color:rgba(244,200,120,.42); }
+    .methodology .card:first-child { border-color:rgba(169,156,255,.42); }
+    .methodology .card:last-child { border-color:rgba(232,181,92,.42); }
     .tag-list { display:flex; flex-wrap:wrap; gap:8px; margin-top:18px; }
     .tag { padding:6px 10px; border:1px solid var(--line); color:var(--ink); font:.72rem var(--mono); }
     .quote { padding:30px 0; border-top:1px solid var(--line); border-bottom:1px solid var(--line); color:var(--ink); font:600 clamp(1.5rem,3vw,2.6rem)/1.25 var(--display); }
-    .quote span { color:var(--mint); }
-    .mermaid-wrap { padding:28px; overflow-x:auto; border:1px solid var(--line); background:rgba(8,18,30,.55); }
+    .quote span { color:var(--lilac); }
+    .mermaid-wrap { padding:28px; overflow-x:auto; border:1px solid var(--line); background:rgba(13,16,48,.55); }
     .mermaid { min-width:680px; color:var(--ink); }
     .status { display:flex; align-items:center; gap:12px; margin-top:24px; color:var(--ink); font-weight:700; }
     .status-dot { width:9px; height:9px; border-radius:50%; background:var(--gold); box-shadow:0 0 14px var(--gold); }
@@ -148,9 +148,9 @@
   D -->|Yes| E(Synthesizer)
   D -->|No| A
   E --> END((End))
-  classDef start fill:#123442,stroke:#f4c878,color:#f4c878
-  classDef process fill:#123442,stroke:#9de1c2,color:#dce8e8
-  classDef decision fill:#3c2930,stroke:#ef947c,color:#dce8e8
+  classDef start fill:#1c1850,stroke:#e8b55c,color:#e8b55c
+  classDef process fill:#1c1850,stroke:#a99cff,color:#e9e7f5
+  classDef decision fill:#352450,stroke:#e39fb0,color:#e9e7f5
   class START,END start
   class A,B,C,E process
   class D decision</div></div></div><div><div class="label">Main orchestrator / v2</div><div class="mermaid-wrap"><div class="mermaid">flowchart TD
@@ -169,13 +169,13 @@
   T -->|No| Y
   Y --> PCT[Persist Conversation Turn]
   PCT --> F[Final Answer]
-  classDef start fill:#123442,stroke:#f4c878,color:#f4c878
-  classDef process fill:#123442,stroke:#9de1c2,color:#dce8e8
-  classDef decision fill:#3c2930,stroke:#ef947c,color:#dce8e8
+  classDef start fill:#1c1850,stroke:#e8b55c,color:#e8b55c
+  classDef process fill:#1c1850,stroke:#a99cff,color:#e9e7f5
+  classDef decision fill:#352450,stroke:#e39fb0,color:#e9e7f5
   class U,F start
   class H,R,P,X,S,C,Y,PCT process
   class D,Q,T decision</div></div></div></div></div></section>
-    <section id="current-status"><div class="container"><div class="section-heading"><div><div class="eyebrow">05 / v2 implementation</div><h2>v2 works end to end. The system is still in progress.</h2></div><p class="lead">AstroWeave can accept a question and birth details, create a chart-backed specialist analysis, and synthesize an answer. It is an active prototype, not a production service.</p></div><div class="cards"><article class="card"><span class="card-number">AVAILABLE NOW</span><h3>End-to-end flow</h3><p>Authenticated users can start or resume conversations in Streamlit. The orchestrator selects career, finance, love, or sports specialists, reuses one birth chart per run, combines their conclusions, and saves the completed turn.</p></article><article class="card"><span class="card-number">CONFIGURABLE</span><h3>Models and charts</h3><p>LLM providers are selected through environment configuration. Chart calculation runs as a separate HTTP service, keeping the orchestration backend independent.</p></article><article class="card"><span class="card-number">NEXT UP</span><h3>Grounded reasoning</h3><p>Knowledge retrieval, astrology-source citations, and real Vedic/KP-specific analysis are planned. Today, methodology selection is passed to prompts but does not yet change retrieval or chart logic.</p></article></div><div class="detail-grid" style="margin-top:14px"><article class="detail-card"><h3>Backend and orchestration</h3><p>FastAPI exposes health, authenticated run, conversation-list, transcript, and deletion endpoints. A run builds request context, invokes the compiled orchestrator graph, and returns the answer, state, and execution trace. Failures from chart or provider calls are surfaced as a gateway error instead of a raw server error.</p><p>The v2 orchestrator loads bounded session and prior-conversation history, classifies the request, executes each specialist task, collects every result, synthesizes the response, and persists the completed turn. Conditional routing repeats task execution until the queue is empty.</p></article><article class="detail-card"><h3>Specialists and state</h3><p>The shared specialist graph runs planner, executor, collector, evaluator, and synthesizer stages for each requested domain. The executor sends the query, methodology, and chart data to the configured LLM and records structured analysis, conclusion, and confidence results.</p><p>The current registry includes career, finance, love, and sports. Shared state carries bounded history, specialist selection, methodology, chart data, results, errors, persistence status, and execution progress.</p></article><article class="detail-card"><h3>Frontend and accounts</h3><p>The Streamlit application provides registration, sign-in, conversation creation, resumption and deletion, transcript display, a question form, and methodology selection. Birth details are collected at registration, securely geocoded for India with verified TLS, stored with the account, then submitted with each request.</p><p>Accounts use a local SQLite store with scrypt password hashing. Streamlit signs the authenticated identity with an expiring bearer token that FastAPI verifies; this remains a development authentication flow, not a production identity system. Date-of-birth uncertainty is captured in the UI, but backend chart handling for an unknown date is not implemented yet.</p></article><article class="detail-card"><h3>LLM and context controls</h3><p>Provider selection supports OpenAI-compatible providers, OpenAI, and Anthropic through environment variables. Provider and model values can be overridden globally, by role, or by specialist. API keys are intentionally kept outside the repository.</p><p>Optional context-size protection is available through <code>ASTROWEAVE_CONTEXT_CHAR_LIMIT</code>. When enabled, over-limit hand-offs degrade gracefully instead of allowing a request to fail without a clear state error.</p></article><article class="detail-card"><h3>Chart calculation service</h3><p>Birth-chart calculation is isolated behind a separate FastAPI service. It provides planet positions, ascendant, divisional charts, dasha-bhukti, bhava charts, and ashtakavarga over HTTP; the main backend configures its URL with <code>ASTROWEAVE_CHART_SERVICE_URL</code>.</p><p>The service uses PyJHora, an AGPL-3.0 dependency. It remains a standalone service with its own environment and no shared application code, so the orchestration backend stays independently deployable.</p></article><article class="detail-card"><h3>Tests and observability</h3><p>Fifty-two automated tests cover authentication, durable history, owner isolation, idempotent request fencing, routing, specialist execution, dispatcher behavior, state reduction, and API contracts. The suite runs without provider keys or chart-service access.</p><p>Application logging records request activity and LLM reasoning fields. The Streamlit final-state debug panel is temporary development tooling and is planned for removal when retrieval grounding is in place.</p></article></div><div class="status"><span class="status-dot"></span> Under active development; not production-ready</div></div></section>
+    <section id="current-status"><div class="container"><div class="section-heading"><div><div class="eyebrow">05 / v2 implementation</div><h2>v2 works end to end. The system is still in progress.</h2></div><p class="lead">AstroWeave can accept a question and birth details, create a chart-backed specialist analysis, and synthesize an answer. It is an active prototype, not a production service.</p></div><div class="cards"><article class="card"><span class="card-number">AVAILABLE NOW</span><h3>End-to-end flow</h3><p>Authenticated users can start or resume conversations in the browser. The orchestrator selects career, finance, love, or sports specialists, reuses one birth chart per run, combines their conclusions, and saves the completed turn.</p></article><article class="card"><span class="card-number">CONFIGURABLE</span><h3>Models and charts</h3><p>LLM providers are selected through environment configuration. Chart calculation runs as a separate HTTP service, keeping the orchestration backend independent.</p></article><article class="card"><span class="card-number">NEXT UP</span><h3>Grounded reasoning</h3><p>Knowledge retrieval, astrology-source citations, and real Vedic/KP-specific analysis are planned. Today, methodology selection is passed to prompts but does not yet change retrieval or chart logic.</p></article></div><div class="detail-grid" style="margin-top:14px"><article class="detail-card"><h3>Backend and orchestration</h3><p>FastAPI exposes health, authenticated run, conversation-list, transcript, and deletion endpoints. A run builds request context, invokes the compiled orchestrator graph, and returns the answer, state, and execution trace. Failures from chart or provider calls are surfaced as a clear gateway error — or a 503 when the chart service is unreachable — instead of a raw server error.</p><p>The v2 orchestrator loads bounded session and prior-conversation history, classifies the request, executes each specialist task, collects every result, synthesizes the response, and persists the completed turn. Conditional routing repeats task execution until the queue is empty.</p></article><article class="detail-card"><h3>Specialists and state</h3><p>The shared specialist graph runs planner, executor, collector, evaluator, and synthesizer stages for each requested domain. The executor sends the query, methodology, and chart data to the configured LLM and records structured analysis, conclusion, and confidence results.</p><p>The current registry includes career, finance, love, and sports. Shared state carries bounded history, specialist selection, methodology, chart data, results, errors, persistence status, and execution progress.</p></article><article class="detail-card"><h3>Frontend and accounts</h3><p>The single-page web app provides registration, sign-in, conversation creation, resumption and deletion, transcript display, a question form, methodology selection, and a light/dark theme toggle. Birth details are collected at registration, securely geocoded for India with verified TLS, stored with the account, then submitted with each request.</p><p>Accounts use a local SQLite store with scrypt password hashing. Sign-in issues an expiring bearer token that the FastAPI backend verifies on each request; this remains a development authentication flow, not a production identity system. Date-of-birth uncertainty is captured in the UI, but backend chart handling for an unknown date is not implemented yet.</p></article><article class="detail-card"><h3>LLM and context controls</h3><p>Provider selection supports OpenAI-compatible providers, OpenAI, and Anthropic through environment variables. Provider and model values can be overridden globally, by role, or by specialist. API keys are intentionally kept outside the repository.</p><p>Optional context-size protection is available through <code>ASTROWEAVE_CONTEXT_CHAR_LIMIT</code>. When enabled, over-limit hand-offs degrade gracefully instead of allowing a request to fail without a clear state error.</p></article><article class="detail-card"><h3>Chart calculation service</h3><p>Birth-chart calculation is isolated behind a separate FastAPI service. It provides planet positions, ascendant, divisional charts, dasha-bhukti, bhava charts, and ashtakavarga over HTTP; the main backend configures its URL with <code>ASTROWEAVE_CHART_SERVICE_URL</code>.</p><p>The service uses PyJHora, an AGPL-3.0 dependency. It remains a standalone service with its own environment and no shared application code, so the orchestration backend stays independently deployable.</p></article><article class="detail-card"><h3>Tests and observability</h3><p>Seventy-four automated tests cover authentication, durable history, owner isolation, idempotent request fencing, routing, specialist execution, dispatcher behavior, chart-client failure handling, state reduction, and API contracts. The suite runs without provider keys or chart-service access.</p><p>Application logging records request activity and LLM reasoning fields. Each run also returns an execution trace of the specialists consulted, which the web app surfaces beneath every answer.</p></article></div><div class="status"><span class="status-dot"></span> Under active development; not production-ready</div></div></section>
     <section id="methodologies"><div class="container"><div class="section-heading"><div><div class="eyebrow">06 / knowledge layer</div><h2>Retrieve what the question needs.</h2></div><p class="lead">The knowledge system is designed to scale by retrieving relevant material for the specific query, specialist, and methodology instead of loading everything into an agent's context.</p></div><div class="split"><div class="diagram"><pre>KNOWLEDGE BASE
 |
 +-- VEDIC
@@ -212,7 +212,7 @@ SPECIALIST · SPECIALIST · SPECIALIST
   <footer><div class="container"><span>AstroWeave</span><span>Python · LangGraph · LangChain</span><a href="https://github.com/chamanthmvs/AstroWeave" target="_blank" rel="noopener noreferrer">GitHub repository</a><span>Built by chamanthmvs</span></div></footer>
   <script type="module">
     import mermaid from "https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs";
-    mermaid.initialize({ startOnLoad: true, theme: "base", themeVariables: { primaryColor: "#123442", primaryTextColor: "#dce8e8", primaryBorderColor: "#9de1c2", lineColor: "#9de1c2", secondaryColor: "#3c2930", tertiaryColor: "#102b34", fontFamily: "Manrope, sans-serif" } });
+    mermaid.initialize({ startOnLoad: true, theme: "base", themeVariables: { primaryColor: "#1c1850", primaryTextColor: "#e9e7f5", primaryBorderColor: "#a99cff", lineColor: "#a99cff", secondaryColor: "#352450", tertiaryColor: "#1a1744", fontFamily: "Manrope, sans-serif" } });
   </script>
 </body>
 </html>
