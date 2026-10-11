@@ -10,6 +10,7 @@ from astroweave.agents.specialists.career.prompts import CAREER_SPECIALIST_PROMP
 from astroweave.agents.specialists.career.tools import CAREER_TOOLS
 from astroweave.agents.specialists.finance.prompts import FINANCE_SPECIALIST_PROMPT
 from astroweave.agents.specialists.finance.tools import FINANCE_TOOLS
+from astroweave.agents.specialists.general.prompts import GENERAL_SPECIALIST_PROMPT
 from astroweave.agents.specialists.love.prompts import LOVE_SPECIALIST_PROMPT
 from astroweave.agents.specialists.love.tools import LOVE_TOOLS
 from astroweave.agents.specialists.sports.prompts import SPORTS_SPECIALIST_PROMPT
@@ -41,6 +42,14 @@ SPECIALIST_REGISTRY = AgentRegistry(
             description="Interprets sports performance and competitive timing.",
             prompt=SPORTS_SPECIALIST_PROMPT,
             tools=ToolRegistry(SPORTS_TOOLS),
+        ),
+        AgentDefinition(
+            name="general",
+            description=(
+                "Interprets the person as a whole (character, strengths, life direction) "
+                "and life areas without a dedicated specialist."
+            ),
+            prompt=GENERAL_SPECIALIST_PROMPT,
         ),
     ]
 )

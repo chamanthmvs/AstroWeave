@@ -28,10 +28,11 @@ def keep_latest_five(
     return (current + update)[-5:]
 
 
-class SpecialistResult(TypedDict):
+class SpecialistResult(TypedDict, total=False):
     specialist: str
     analysis: str
     conclusion: str
+    timing: str
     confidence: str
 
 

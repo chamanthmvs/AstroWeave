@@ -13,7 +13,8 @@ dependencies = [
     "uvicorn",
     "httpx",
     "langgraph",
-    "langchain-openai",   # also used for Groq via its OpenAI-compatible endpoint
+    "anthropic>=1.13",    # default LLM provider (Claude), via the official SDK
+    "langchain-openai",   # optional providers: OpenAI, and Groq via its OpenAI-compatible endpoint
     "pydantic>=2,<3",
     "python-dotenv",
     "geopy",
@@ -23,8 +24,6 @@ dependencies = [
 [project.optional-dependencies]
 # Install with: pip install -e ".[dev]"
 dev = ["pytest"]
-# Optional LLM provider; only needed if ASTROWEAVE_LLM_PROVIDER=anthropic.
-anthropic = ["langchain-anthropic"]
 
 [tool.setuptools.packages.find]
 # Two top-level packages: the `astroweave` library under src/, and the

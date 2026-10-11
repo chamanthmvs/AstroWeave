@@ -44,15 +44,22 @@ def invoke_json_response(
     llm: Any,
     messages: list[Any],
     max_attempts: int = 2,
+    json_schema: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Invoke an LLM and retry once when its JSON response is malformed."""
+    """Invoke an LLM and retry once when its JSON response is malformed.
+
+    When the model declares `supports_json_schema = True` (the Claude adapter),
+    `json_schema` is sent as a structured output so the reply is guaranteed to
+    match it; other providers rely on the prompt's JSON instructions.
+    """
 
     if max_attempts < 1:
         raise ValueError("max_attempts must be at least 1")
 
+    use_schema = json_schema is not None and getattr(llm, "supports_json_schema", False) is True
     last_error: ValueError | None = None
     for attempt in range(1, max_attempts + 1):
-        response = llm.invoke(messages)
+        response = llm.invoke(messages, json_schema=json_schema) if use_schema else llm.invoke(messages)
         content = response.content
         metadata = getattr(response, "response_metadata", {}) or {}
         logger.info(

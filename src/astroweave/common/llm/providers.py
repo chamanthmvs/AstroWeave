@@ -45,9 +45,10 @@ def _build_openai(config: LLMConfig) -> Any:
 
 
 def _build_anthropic(config: LLMConfig) -> Any:
-    from langchain_anthropic import ChatAnthropic
+    # Official Anthropic SDK; see anthropic_model for the request shape.
+    from .anthropic_model import AnthropicChatModel
 
-    return ChatAnthropic(model=config.model, temperature=config.temperature)
+    return AnthropicChatModel(model=config.model, max_tokens=config.max_tokens, effort=config.effort)
 
 
 def _build_groq(config: LLMConfig) -> Any:

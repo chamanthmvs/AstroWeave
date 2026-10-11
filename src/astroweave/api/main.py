@@ -365,6 +365,7 @@ def _execution_trace(state: dict) -> list[dict]:
             "specialist": result.get("specialist"),
             "confidence": result.get("confidence"),
             "conclusion": result.get("conclusion"),
+            "timing": result.get("timing") or "",
         })
     for message in state.get("errors") or []:
         trace.append({"step": "error", "message": message})

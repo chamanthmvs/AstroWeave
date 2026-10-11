@@ -43,7 +43,7 @@ Plan Specialist Tasks --> Select Next Task -- queue empty --+
 ## Core Concepts
 
 - **Hierarchical orchestration:** a top-level manager invokes independently structured specialist subgraphs.
-- **Domain specialization:** specialists focus on areas such as sports, relationships, career, education, and finance.
+- **Domain specialization:** career, finance, love, and sports specialists answer questions about their area; a general specialist reads the person as a whole (personality, strengths, life direction) and covers areas without a dedicated specialist, such as education, family, children, health constitution, and travel abroad.
 - **Methodology separation:** Vedic and KP are analysis methodologies, not ordinary domain specialists.
 - **Queue-driven execution:** planned specialist tasks execute one at a time, are collected transparently, and continue until the queue is empty.
 - **Two-scope history:** current-session messages and prior-session conversation messages are loaded separately from SQLite and supplied as bounded context.
@@ -58,8 +58,8 @@ For a question such as *“Will I get a new job this year?”*, AstroWeave can i
 
 - Python
 - LangGraph
-- LangChain
-- Large language models
+- Claude (Opus 5.5 by default) via the official Anthropic SDK; OpenAI and Groq remain selectable
+- PyJHora (Swiss Ephemeris) in an isolated chart service
 - Retrieval and knowledge bases
 - Tool contracts and per-agent registries (LLM-directed tool execution is not wired yet)
 
@@ -95,13 +95,11 @@ another. The package is installable, so there is no `PYTHONPATH` to set:
 
 ```bash
 pip install -e ".[dev]"          # runtime deps + pytest; or `pip install -r requirements.txt`
-export ASTROWEAVE_LLM_PROVIDER=groq
-export ASTROWEAVE_LLM_MAX_TOKENS=4096
+export ANTHROPIC_API_KEY=your_key_here   # Claude Opus 5.5 is the default model
 export ASTROWEAVE_SESSION_HISTORY_LIMIT=12
 export ASTROWEAVE_CONVERSATION_HISTORY_LIMIT=8
 export ASTROWEAVE_REQUEST_CLAIM_TTL_SECONDS=1800
 export ASTROWEAVE_AUTH_SECRET=replace-with-a-long-random-secret
-export GROQ_API_KEY=your_key_here
 uvicorn astroweave.api.main:app --reload
 ```
 
@@ -134,7 +132,32 @@ uvicorn main:app --port 8100
 Never commit `.env` files, API keys, or local user databases. Use your
 hosting provider's secret manager for deployments.
 
-JSON-producing LLM calls are retried once when a provider returns malformed or
-truncated output. Logs include the attempt number, response length, and finish
-reason. `ASTROWEAVE_LLM_MAX_TOKENS` can be overridden by role or specialist
-using the same suffix precedence as the other LLM settings.
+### LLM configuration
+
+Every setting resolves most-specific-first: `ASTROWEAVE_LLM_<SETTING>_<AGENT>`
+(e.g. `_CAREER`), then `_<ROLE>` (`_SPECIALIST` / `_ORCHESTRATOR`), then the
+global `ASTROWEAVE_LLM_<SETTING>`.
+
+| Setting | Default | Notes |
+|---|---|---|
+| `PROVIDER` | `anthropic` | also `openai`, `groq` (needs `GROQ_API_KEY`) |
+| `MODEL` | `claude-opus-5-5` | `openai/gpt-oss-120b` when the provider is `groq` |
+| `EFFORT` | `high` for specialists, `medium` for routing/synthesis | Claude only: `low`, `medium`, `high`, `xhigh`, `max` |
+| `MAX_TOKENS` | `64000` for Claude, `4096` otherwise | Claude's thinking counts toward this; requests are streamed |
+| `TEMPERATURE` | `0.2` | ignored by Claude, whose current models do not accept it |
+
+Claude requests use adaptive thinking, prompt caching for the long specialist
+prompts, structured outputs (JSON schemas) for routing and specialist replies,
+and server-side refusal fallbacks. Other providers' JSON replies are retried
+once when malformed or truncated.
+
+### Chart data
+
+The chart service computes the Parashari sections with the **Lahiri** ayanamsa
+and the KP section (Placidus cusps, star/sub lords, ruling planets) with the
+**Krishnamurti** ayanamsa; both are request fields (`ayanamsa`, `kp_ayanamsa`).
+Before a specialist sees the chart, `astroweave.common.astro.build_chart_view`
+derives house placements, lordships, dignities, aspects, nakshatras, combustion,
+KP significators, dasha windows and transit context in code, and keeps the
+divisional charts relevant to that specialist's domain. It never changes a
+computed value.

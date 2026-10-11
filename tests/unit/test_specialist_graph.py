@@ -47,6 +47,7 @@ class SpecialistGraphTests(unittest.TestCase):
                     "specialist": "career",
                     "analysis": "Jupiter aspects the 10th house.",
                     "conclusion": "A promotion is likely this year.",
+                    "timing": "",
                     "confidence": "high",
                 }
             ],
@@ -73,6 +74,23 @@ class SpecialistGraphTests(unittest.TestCase):
         self.assertEqual(result["specialist_results"], [])
         self.assertTrue(result["errors"])
         self.assertEqual(mock_get_llm.return_value.invoke.call_count, 2)
+
+    @patch("astroweave.graphs.specialist.specialist_graph.get_llm")
+    def test_executor_coerces_non_text_fields_to_text(self, mock_get_llm):
+        mock_get_llm.return_value = _fake_llm(json.dumps({
+            "analysis": "a",
+            "conclusion": "c",
+            "timing": [{"window": "2027-02-12 to 2029-10-22"}],
+            "confidence": "medium",
+        }))
+
+        result = build_specialist_graph().invoke(
+            {"current_task": "career", "user_query": "q", "chart_data": {"d1": {}}}
+        )
+
+        timing = result["specialist_results"][0]["timing"]
+        self.assertIsInstance(timing, str)
+        self.assertIn("2027-02-12 to 2029-10-22", timing)
 
     @patch("astroweave.graphs.specialist.specialist_graph.get_llm")
     def test_malformed_llm_response_is_retried_once(self, mock_get_llm):

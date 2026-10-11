@@ -22,10 +22,10 @@
       "presentation": { "group": "astroweave", "panel": "dedicated" }
     },
     {
-      "label": "Backend API + web UI (:8000)",
+      "label": "Backend API + web UI (:8001)",
       "type": "shell",
       "command": "${workspaceFolder}/.venv/bin/uvicorn",
-      "args": ["astroweave.api.main:app", "--reload", "--port", "8000"],
+      "args": ["astroweave.api.main:app", "--reload", "--port", "8001"],
       "options": { "cwd": "${workspaceFolder}" },
       "isBackground": true,
       "problemMatcher": {
@@ -40,7 +40,7 @@
     },
     {
       "label": "▶ AstroWeave: all services",
-      "dependsOn": ["Chart service (:8100)", "Backend API + web UI (:8000)"],
+      "dependsOn": ["Chart service (:8100)", "Backend API + web UI (:8001)"],
       "dependsOrder": "parallel",
       "problemMatcher": [],
       "group": { "kind": "build", "isDefault": true }

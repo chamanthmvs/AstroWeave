@@ -16,11 +16,11 @@
       "console": "integratedTerminal"
     },
     {
-      "name": "Backend API + web UI (:8000)",
+      "name": "Backend API + web UI (:8001)",
       "type": "debugpy",
       "request": "launch",
       "module": "uvicorn",
-      "args": ["astroweave.api.main:app", "--port", "8000"],
+      "args": ["astroweave.api.main:app", "--port", "8001"],
       "cwd": "${workspaceFolder}",
       "python": "${workspaceFolder}/.venv/bin/python",
       "console": "integratedTerminal"
@@ -29,7 +29,7 @@
   "compounds": [
     {
       "name": "▶ AstroWeave: all services",
-      "configurations": ["Chart service (:8100)", "Backend API + web UI (:8000)"],
+      "configurations": ["Chart service (:8100)", "Backend API + web UI (:8001)"],
       "stopAll": true,
       "presentation": { "group": "astroweave", "order": 1 }
     }
