@@ -158,6 +158,13 @@ and the KP section (Placidus cusps, star/sub lords, ruling planets) with the
 **Krishnamurti** ayanamsa; both are request fields (`ayanamsa`, `kp_ayanamsa`).
 Before a specialist sees the chart, `astroweave.common.astro.build_chart_view`
 derives house placements, lordships, dignities, aspects, nakshatras, combustion,
-KP significators, dasha windows and transit context in code, and keeps the
+KP significators, dasha windows (with month-level pratyantardashas from one year
+back to five years ahead) and transit context in code, and keeps the
 divisional charts relevant to that specialist's domain. It never changes a
 computed value.
+
+Specialist prompts share explicit honesty rules: every statement must rest on a
+chart factor in the data, unfavourable indications are stated as plainly as
+favourable ones, and the final answer may not add or soften anything the
+specialists found. Instead of a confidence label, answers say concretely what
+limits certainty when something does.

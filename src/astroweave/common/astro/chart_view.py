@@ -106,7 +106,9 @@ def build_chart_view(
         if bav := _bav_by_house(chart.get("ashtakavarga"), lagna):
             view["bhinna_ashtakavarga_by_house"] = bav
 
-    if dasha := _dasha_view(chart.get("dasha_bhukti"), chart.get("current_dasha"), as_of):
+    if dasha := _dasha_view(
+        chart.get("dasha_bhukti"), chart.get("current_dasha"), as_of, chart.get("pratyantardashas")
+    ):
         view["dasha"] = dasha
     if transits := _transit_view(chart.get("transits"), lagna, planets, chart.get("ashtakavarga")):
         view["transits"] = transits
@@ -392,11 +394,14 @@ def _status(start: date, end: date, today: date) -> str:
     return "future"
 
 
-def _dasha_view(rows: Any, current: Any, today: date) -> dict[str, Any] | None:
+def _dasha_view(rows: Any, current: Any, today: date, pratyantar: Any = None) -> dict[str, Any] | None:
     """Full Vimshottari mahadasha sequence plus antardashas around the present.
 
     Antardashas are listed for the previous, current and next mahadasha (about
     40 years around today); the complete mahadasha sequence is always kept.
+    Pratyantardashas (month-level) are passed through for the window the chart
+    service computed, with that window stated so timing outside it is not
+    narrowed beyond antardasha level.
     """
     if not isinstance(rows, list) or not rows:
         return None
@@ -443,6 +448,24 @@ def _dasha_view(rows: Any, current: Any, today: date) -> dict[str, Any] | None:
     }
     if isinstance(current, Mapping) and current.get("maha_lord"):
         view["current"] = {key: value for key, value in current.items() if key != "as_of"}
+    if isinstance(pratyantar, Mapping) and pratyantar.get("periods"):
+        view["pratyantardashas"] = {
+            "covers": f"{pratyantar.get('window_start')} to {pratyantar.get('window_end')}",
+            "note": "Outside this window, timing is available only to antardasha level.",
+            "periods": [
+                {
+                    "mahadasha": period["maha_lord"],
+                    "antardasha": period["antardasha_lord"],
+                    "pratyantardasha": period["pratyantardasha_lord"],
+                    "start": period["start_date"],
+                    "end": period["end_date"],
+                    "status": _status(
+                        date.fromisoformat(period["start_date"]), date.fromisoformat(period["end_date"]), today
+                    ),
+                }
+                for period in pratyantar["periods"]
+            ],
+        }
     return view
 
 

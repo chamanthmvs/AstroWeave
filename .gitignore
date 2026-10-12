@@ -34,6 +34,10 @@ htmlcov/
 # Local account records contain password hashes and should not be committed.
 app/data/users.json
 app/data/astroweave.db
+# SQLite write-ahead log and shared-memory files hold recent rows too.
+app/data/*.db-shm
+app/data/*.db-wal
+app/data/*.db-journal
 
 # Agent-oriented project context notes (not for the repo history).
 PROJECT_CONTEXT.md

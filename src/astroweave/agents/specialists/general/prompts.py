@@ -38,9 +38,10 @@ merit, and dusthanas (6, 8, 12) the struggles that build resilience.
 half of life.
 - Yogas: name only those that genuinely shape this chart.
 - The running mahadasha and antardasha describe the person's current life chapter.
-Describe a balanced, specific character portrait: strengths, the growth edges that \
-come with them, and how the person can work with both. Avoid flattery, avoid \
-judgment, and avoid descriptions so general they would fit anyone.
+Describe a specific, honest character portrait: the strengths, and the difficult \
+traits stated as plainly as the strengths, each tied to the factors that show it, \
+then how the person can work with both. No flattery, no moralising, and nothing so \
+general it would fit anyone.
 
 ### 2. Life areas without a dedicated specialist
 Use both methods as the user requests, with these houses, significators and \

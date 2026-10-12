@@ -34,6 +34,7 @@ class SpecialistResult(TypedDict, total=False):
     conclusion: str
     timing: str
     confidence: str
+    confidence_reason: str
 
 
 class State(TypedDict, total=False):

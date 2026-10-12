@@ -82,6 +82,12 @@ class ChartRequest(BaseModel):
     include_transits: bool = Field(default=True)
     include_current_dasha: bool = Field(default=True)
     include_kp: bool = Field(default=True)
+    pratyantardasha_years_back: float = Field(
+        default=1, ge=0, le=20, description="Pratyantardashas listed from this many years before today."
+    )
+    pratyantardasha_years_ahead: float = Field(
+        default=5, ge=0, le=30, description="Pratyantardashas listed up to this many years after today."
+    )
     ayanamsa: str = Field(
         default=DEFAULT_AYANAMSA,
         description="Ayanamsa for the Parashari sections (D1, vargas, dasha, transits, ...).",
@@ -211,6 +217,41 @@ def _dasha_bhukti_table(julian_day: float, place: drik.Place) -> list[dict[str, 
             "duration_years": round(duration_years, 4),
         })
     return table
+
+
+def _pratyantardasha_window(
+    julian_day: float, place: drik.Place, now_local: datetime, years_back: float, years_ahead: float
+) -> dict[str, object]:
+    """Vimshottari pratyantardashas (third level) overlapping a window around today.
+
+    The full table has 729 rows over 120 years; only the window that timing
+    questions need is returned. Each period ends where the next one starts.
+    """
+    _, rows = vimsottari.get_vimsottari_dhasa_bhukthi(
+        julian_day, place, dhasa_level_index=const.MAHA_DHASA_DEPTH.PRATYANTARA,
+    )
+    starts = [datetime(year, month, day).date() for _lords, (year, month, day, _hour), _duration in rows]
+    today = now_local.date()
+    window_start = today - timedelta(days=years_back * 365.2425)
+    window_end = today + timedelta(days=years_ahead * 365.2425)
+    periods = []
+    for index, ((maha, antar, pratyantar), _start, duration_years) in enumerate(rows):
+        start = starts[index]
+        end = starts[index + 1] if index + 1 < len(rows) else start + timedelta(days=duration_years * 365.2425)
+        if end <= window_start or start >= window_end:
+            continue
+        periods.append({
+            "maha_lord": _planet_label(maha),
+            "antardasha_lord": _planet_label(antar),
+            "pratyantardasha_lord": _planet_label(pratyantar),
+            "start_date": start.isoformat(),
+            "end_date": end.isoformat(),
+        })
+    return {
+        "window_start": window_start.isoformat(),
+        "window_end": window_end.isoformat(),
+        "periods": periods,
+    }
 
 
 def _bhava_chart_table(julian_day: float, place: drik.Place) -> list[dict[str, object]]:
@@ -366,6 +407,10 @@ def compute_chart(request: ChartRequest) -> dict[str, object]:
 
         if request.include_dasha_bhukti:
             result["dasha_bhukti"] = _dasha_bhukti_table(julian_day, place)
+            result["pratyantardashas"] = _pratyantardasha_window(
+                julian_day, place, now_local,
+                request.pratyantardasha_years_back, request.pratyantardasha_years_ahead,
+            )
         if request.include_bhava_chart:
             result["bhava_chart"] = _bhava_chart_table(julian_day, place)
         if request.include_ashtakavarga:

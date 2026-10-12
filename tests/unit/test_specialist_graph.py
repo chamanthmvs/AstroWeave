@@ -49,6 +49,7 @@ class SpecialistGraphTests(unittest.TestCase):
                     "conclusion": "A promotion is likely this year.",
                     "timing": "",
                     "confidence": "high",
+                    "confidence_reason": "",
                 }
             ],
         )

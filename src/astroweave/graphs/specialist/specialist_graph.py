@@ -78,6 +78,7 @@ def _executor(state: State) -> State:
                 "conclusion": _as_text(parsed.get("conclusion")),
                 "timing": _as_text(parsed.get("timing")),
                 "confidence": parsed.get("confidence", "low"),
+                "confidence_reason": _as_text(parsed.get("confidence_reason")),
             }
         ],
     }

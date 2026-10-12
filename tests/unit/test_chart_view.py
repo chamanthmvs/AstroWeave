@@ -101,6 +101,27 @@ class ChartViewTests(unittest.TestCase):
         self.assertEqual([md["lord"] for md in current], ["Saturn"])
         self.assertEqual(dasha["current"]["pratyantardasha_lord"], "Jupiter")
 
+    def test_pratyantardashas_give_month_level_timing_within_a_stated_window(self):
+        window = self.view["dasha"]["pratyantardashas"]
+        self.assertTrue(window["covers"].endswith("2031-10-12"))
+        periods = window["periods"]
+        # Contiguous: each period ends exactly where the next begins.
+        for earlier, later in zip(periods, periods[1:]):
+            self.assertEqual(earlier["end"], later["start"])
+        current = [p for p in periods if p["status"] == "current"]
+        self.assertEqual(
+            [(p["antardasha"], p["pratyantardasha"], p["start"], p["end"]) for p in current],
+            [("Saturn", "Jupiter", "2026-09-19", "2027-02-12")],
+        )
+        # The next one starts where the current antardasha ends (Saturn-Mercury-Mercury).
+        following = periods[periods.index(current[0]) + 1]
+        self.assertEqual(
+            (following["antardasha"], following["pratyantardasha"], following["start"], following["end"]),
+            ("Mercury", "Mercury", "2027-02-12", "2027-07-01"),
+        )
+        # KP timing uses the antara level too.
+        self.assertIn("pratyantardashas", build_chart_view(CHART, "love", "kp")["dasha"])
+
     def test_transits_are_read_from_lagna_and_moon(self):
         transits = self.view["transits"]
         saturn = next(p for p in transits["planets"] if p["planet"] == "Saturn")

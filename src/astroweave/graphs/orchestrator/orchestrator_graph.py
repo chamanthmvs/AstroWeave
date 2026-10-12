@@ -213,6 +213,8 @@ def _synthesize_response(state: State) -> State:
         )
         if result.get("timing"):
             block += f"\nTiming: {result['timing']}"
+        if result.get("confidence_reason"):
+            block += f"\nWhat limits certainty: {result['confidence_reason']}"
         findings.append(block)
     user_content = (
         f"User question: {state.get('user_query', '')}\n"
