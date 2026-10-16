@@ -16,12 +16,12 @@
       background:radial-gradient(130% 90% at 50% -20%, #1a1c46 0%, #10112f 45%, #0a0920 100%) fixed; }
     /* Living night sky: a static gradient base, a slow-drifting nebula glow, and a
        star canvas painted by JS. All sit behind the content and ignore the pointer. */
-    .sky-glow { position:fixed; inset:-20%; z-index:-2; pointer-events:none; opacity:.9;
+    .sky-glow { position:fixed; inset:-20%; z-index:-2; pointer-events:none; opacity:.55;
       background:
-        radial-gradient(38% 30% at 22% 24%, rgba(169,156,255,.20), transparent 70%),
-        radial-gradient(42% 34% at 80% 30%, rgba(232,181,92,.16), transparent 72%),
-        radial-gradient(46% 40% at 60% 82%, rgba(227,159,176,.14), transparent 72%);
-      filter:blur(14px); animation:nebula 46s ease-in-out infinite alternate; will-change:transform; }
+        radial-gradient(38% 30% at 22% 24%, rgba(169,156,255,.13), transparent 70%),
+        radial-gradient(42% 34% at 80% 30%, rgba(232,181,92,.10), transparent 72%),
+        radial-gradient(46% 40% at 60% 82%, rgba(227,159,176,.09), transparent 72%);
+      filter:blur(18px); animation:nebula 60s ease-in-out infinite alternate; will-change:transform; }
     @keyframes nebula {
       0%   { transform:translate3d(-2%,-1%,0) scale(1.02) rotate(0deg); }
       50%  { transform:translate3d(2%,1.5%,0) scale(1.08) rotate(3deg); }
@@ -48,14 +48,24 @@
     .button-row { display:flex; flex-wrap:wrap; gap:12px; }
     .button { display:inline-block; padding:11px 17px; border:1px solid var(--lilac); color:var(--night); background:var(--lilac); font-size:.85rem; font-weight:800; text-decoration:none; }
     .button.secondary { color:var(--ink); background:transparent; border-color:var(--line); }
-    .hero-art { min-height:390px; position:relative; display:grid; place-items:center; }
-    .orbit { width:min(360px,75vw); aspect-ratio:1; position:relative; border:1px solid rgba(169,156,255,.32); border-radius:50%; transform:rotate(-18deg); }
-    .orbit::before,.orbit::after { position:absolute; content:""; inset:10%; border:1px solid rgba(232,181,92,.31); border-radius:50%; }
-    .orbit::after { inset:25%; border-color:rgba(227,159,176,.3); }
-    .core { width:116px; height:116px; display:grid; place-items:center; position:absolute; inset:0; margin:auto; border:1px solid var(--gold); border-radius:50%; color:var(--gold); background:#1c1850; font:500 .66rem var(--mono); letter-spacing:.08em; text-align:center; text-transform:uppercase; }
-    .planet { position:absolute; width:15px; height:15px; border-radius:50%; background:var(--rose); box-shadow:0 0 22px rgba(227,159,176,.75); }
-    .planet.one { top:12%; left:28%; } .planet.two { right:4%; bottom:31%; background:var(--lilac); box-shadow:0 0 22px rgba(169,156,255,.75); } .planet.three { left:18%; bottom:13%; width:9px; height:9px; background:var(--gold); }
-    .orbit-caption { position:absolute; right:5%; bottom:4%; color:var(--muted); font:.68rem var(--mono); letter-spacing:.08em; text-transform:uppercase; }
+    .hero-art { --orbit:min(360px,74vw); min-height:390px; position:relative; display:grid; place-items:center; }
+    .orbit { width:var(--orbit); aspect-ratio:1; position:relative; border:1px solid rgba(169,156,255,.22); border-radius:50%; }
+    .orbit::before,.orbit::after { position:absolute; content:""; inset:16%; border:1px solid rgba(232,181,92,.16); border-radius:50%; }
+    .orbit::after { inset:33%; border-color:rgba(227,159,176,.16); }
+    .core { width:118px; height:118px; display:grid; place-items:center; position:absolute; inset:0; margin:auto; border:1px solid rgba(232,181,92,.5); border-radius:50%; color:var(--gold); background:radial-gradient(circle at 50% 38%, #221d54, #161139); box-shadow:0 0 34px rgba(232,181,92,.14), inset 0 0 22px rgba(169,156,255,.12); font:500 .66rem var(--mono); letter-spacing:.08em; text-align:center; text-transform:uppercase; z-index:2; }
+    /* Nine grahas revolving around the manager. The ring spins; each glyph
+       counter-rotates so the symbol stays upright as it travels. */
+    .orbit-system { position:absolute; inset:0; margin:auto; width:var(--orbit); aspect-ratio:1; animation:revolve 120s linear infinite; }
+    .planet { position:absolute; top:50%; left:50%; width:var(--size,13px); height:var(--size,13px); margin:calc(var(--size,13px) / -2); border-radius:50%;
+      transform:rotate(var(--a)) translateY(calc(var(--orbit) / -2)); }
+    .planet .glyph { display:grid; place-items:center; width:100%; height:100%; border-radius:50%;
+      font:var(--gsize,11px)/1 var(--body); color:#15112f; background:var(--c,var(--lilac));
+      box-shadow:0 0 10px -1px var(--c,var(--lilac)); transform:rotate(calc(-1 * var(--a))); animation:revolve 120s linear infinite reverse; }
+    /* Rahu/Ketu are shadow points: hollow, dimmer, no fill. */
+    .planet.node .glyph { color:var(--c); background:transparent; border:1px solid var(--c); box-shadow:none; opacity:.8; }
+    @keyframes revolve { to { transform:rotate(360deg); } }
+    @media (prefers-reduced-motion:reduce) { .orbit-system, .planet .glyph { animation:none; } }
+    .orbit-caption { position:absolute; right:4%; bottom:2%; color:var(--muted); font:.66rem var(--mono); letter-spacing:.08em; text-transform:uppercase; opacity:.75; }
     section { padding:96px 0; border-top:1px solid var(--line); }
     .section-heading { display:grid; grid-template-columns:.7fr 1.3fr; gap:40px; margin-bottom:46px; }
     h2 { font:600 clamp(2rem,4vw,3.4rem)/1 var(--display); letter-spacing:-.03em; }
@@ -99,7 +109,7 @@
   <canvas class="sky" aria-hidden="true"></canvas>
   <header class="site-header"><nav class="container nav" aria-label="Primary navigation"><a class="brand" href="#top"><span class="brand-mark">A</span> AstroWeave</a><div class="nav-links"><a href="#architecture">Architecture</a><a href="#current-status">Current status</a><a href="#methodologies">Methodologies</a><a href="#roadmap">Scope</a><a href="https://github.com/chamanthmvs/AstroWeave" target="_blank" rel="noopener noreferrer">GitHub repository</a></div></nav></header>
   <main id="top">
-    <section class="hero"><div class="container hero-grid"><div><div class="eyebrow">LangGraph · multi-agent astrology</div><h1>Astrology, <em>orchestrated.</em></h1><p class="hero-copy">AstroWeave is a hierarchical reasoning system where a central Astrologer Manager coordinates specialists, methodologies, tools, and knowledge to turn one natural-language question into one considered answer.</p><div class="button-row"><a class="button" href="https://github.com/chamanthmvs/AstroWeave" target="_blank" rel="noopener noreferrer">View the repository</a><a class="button secondary" href="#current-status">Current project status</a></div></div><div class="hero-art" aria-label="Abstract orbit illustration"><div class="orbit"><div class="core">Astrologer<br>Manager</div><i class="planet one"></i><i class="planet two"></i><i class="planet three"></i></div><div class="orbit-caption">many signals / one constellation</div></div></div></section>
+    <section class="hero"><div class="container hero-grid"><div><div class="eyebrow">LangGraph · multi-agent astrology</div><h1>Astrology, <em>orchestrated.</em></h1><p class="hero-copy">AstroWeave is a hierarchical reasoning system where a central Astrologer Manager coordinates specialists, methodologies, tools, and knowledge to turn one natural-language question into one considered answer.</p><div class="button-row"><a class="button" href="https://github.com/chamanthmvs/AstroWeave" target="_blank" rel="noopener noreferrer">View the repository</a><a class="button secondary" href="#current-status">Current project status</a></div></div><div class="hero-art" aria-label="The Astrologer Manager with the nine grahas orbiting it"><div class="orbit"><div class="core">Astrologer<br>Manager</div></div><div class="orbit-system"><i class="planet" style="--a:0deg;--c:#e8b55c;--size:15px;--gsize:12px" title="Sun"><span class="glyph">☉</span></i><i class="planet" style="--a:40deg;--c:#e9e7f5;--size:14px" title="Moon"><span class="glyph">☽</span></i><i class="planet" style="--a:80deg;--c:#e39fb0;--size:13px" title="Mars"><span class="glyph">♂</span></i><i class="planet" style="--a:120deg;--c:#a99cff;--size:13px" title="Mercury"><span class="glyph">☿</span></i><i class="planet" style="--a:160deg;--c:#e0b36a;--size:15px;--gsize:12px" title="Jupiter"><span class="glyph">♃</span></i><i class="planet" style="--a:200deg;--c:#f0bcc9;--size:14px" title="Venus"><span class="glyph">♀</span></i><i class="planet" style="--a:240deg;--c:#9a93cf;--size:13px" title="Saturn"><span class="glyph">♄</span></i><i class="planet node" style="--a:280deg;--c:#b9aef5;--size:12px" title="Rahu"><span class="glyph">☊</span></i><i class="planet node" style="--a:320deg;--c:#e7aebb;--size:12px" title="Ketu"><span class="glyph">☋</span></i></div><div class="orbit-caption">nine grahas · one manager</div></div></div></section>
     <section id="architecture"><div class="container"><div class="section-heading"><div><div class="eyebrow">01 / the system</div><h2>One question. Multiple perspectives.</h2></div><p class="lead">A user should not need to know which specialist, astrology system, tool, or knowledge source is required. AstroWeave determines how the question should be analyzed, delegates the work, evaluates the results, and coordinates the final synthesis.</p></div><div class="diagram"><pre>USER QUESTION
       |
       v
@@ -239,9 +249,9 @@ SPECIALIST · SPECIALIST · SPECIALIST
       var dpr = Math.min(window.devicePixelRatio || 1, 2);
       var W = 0, H = 0, stars = [], edges = [], shooting = null, nextShoot = 3000, scrollY = window.scrollY || 0;
       var LAYERS = [
-        { factor: 0.15, min: 0.5, max: 1.0, alpha: 0.5 },
-        { factor: 0.35, min: 0.8, max: 1.6, alpha: 0.7 },
-        { factor: 0.6,  min: 1.2, max: 2.3, alpha: 0.95 }
+        { factor: 0.15, min: 0.5, max: 1.0, alpha: 0.42 },
+        { factor: 0.35, min: 0.8, max: 1.5, alpha: 0.6 },
+        { factor: 0.6,  min: 1.1, max: 2.1, alpha: 0.8 }
       ];
       var COLORS = ["255,255,255", "233,231,245", "169,156,255", "232,181,92", "227,159,176"];
       function rand(a, b) { return a + Math.random() * (b - a); }
@@ -253,7 +263,7 @@ SPECIALIST · SPECIALIST · SPECIALIST
         var target = Math.min(260, Math.floor((W * H) / 9000));
         stars = [];
         for (var i = 0; i < target; i++) {
-          var layer = LAYERS[i % 3], gold = Math.random() < 0.12;
+          var layer = LAYERS[i % 3], gold = Math.random() < 0.08;
           stars.push({
             x: Math.random(), y: Math.random() * 1.6,
             r: rand(layer.min, layer.max), a: layer.alpha * rand(0.6, 1), f: layer.factor,
