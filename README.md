@@ -151,6 +151,21 @@ prompts, structured outputs (JSON schemas) for routing and specialist replies,
 and server-side refusal fallbacks. Other providers' JSON replies are retried
 once when malformed or truncated.
 
+### Rate limiting
+
+Because every `/run` spends money on the LLM provider's key, the endpoint has a
+per-user daily cap (default **50 runs/day**, UTC) and an optional global
+backstop. Idempotent replays of an already-answered request do not count.
+
+| Setting | Default | Notes |
+|---|---|---|
+| `ASTROWEAVE_RATE_LIMIT_PER_DAY` | `50` | per-user cap; `0` disables it |
+| `ASTROWEAVE_RATE_LIMIT_GLOBAL_PER_DAY` | `0` (off) | cap across all users; set a number for a hard spend ceiling |
+
+Over the cap, `/run` returns **HTTP 429** (`code: rate_limited`) with a
+`Retry-After` header. `GET /usage` reports the signed-in user's runs used and
+remaining today. Counts live in the same SQLite database (`usage_daily` table).
+
 ### Chart data
 
 The chart service computes the Parashari sections with the **Lahiri** ayanamsa

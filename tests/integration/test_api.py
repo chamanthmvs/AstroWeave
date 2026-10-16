@@ -22,6 +22,13 @@ class ApiTests(unittest.TestCase):
         profile = patch("astroweave.api.main._user_profile", return_value={"email": "demo-user", "birth_details": {}})
         profile.start()
         self.addCleanup(profile.stop)
+        # Keep the real rate-limit DB out of the tests; allow by default.
+        from astroweave.common.ratelimit import RateLimitResult
+
+        limiter = patch("astroweave.api.main._rate_limiter")
+        self.rate_limiter = limiter.start()
+        self.addCleanup(limiter.stop)
+        self.rate_limiter.check_and_consume.return_value = RateLimitResult(allowed=True)
 
     def test_health(self):
         response = self.client.get("/health")
@@ -167,6 +174,60 @@ class ApiTests(unittest.TestCase):
         specialist_steps = [step for step in trace if step["step"] == "specialist"]
         self.assertEqual([step["specialist"] for step in specialist_steps], ["career", "finance"])
         self.assertEqual(specialist_steps[0]["conclusion"], "Promotion likely.")
+
+    @patch("astroweave.api.main._orchestrator_graph")
+    @patch("astroweave.api.main._conversation_store")
+    def test_run_refused_when_rate_limited(self, mock_store, mock_graph):
+        from astroweave.common.ratelimit import RateLimitResult
+
+        mock_store.request_ids.return_value = None
+        mock_store.claim_request.return_value = ("claim-token", None)
+        self.rate_limiter.check_and_consume.return_value = RateLimitResult(
+            allowed=False, scope="user", limit=50, used=50, retry_after_seconds=3600
+        )
+
+        response = self.client.post(
+            "/run",
+            json={"query": "Will I get a new job this year?", "username": "demo-user"},
+            headers=self._headers(),
+        )
+
+        self.assertEqual(response.status_code, 429)
+        self.assertEqual(response.json()["detail"]["code"], "rate_limited")
+        self.assertEqual(response.headers["Retry-After"], "3600")
+        # The expensive model run must not happen, and the claim is released for retry.
+        mock_graph.invoke.assert_not_called()
+        mock_store.release_request.assert_called_once()
+
+    @patch("astroweave.api.main._orchestrator_graph")
+    @patch("astroweave.api.main._conversation_store")
+    def test_idempotent_replay_does_not_consume_budget(self, mock_store, mock_graph):
+        mock_store.request_ids.return_value = ("conversation-1", "session-1")
+        mock_store.claim_request.return_value = (None, "Saved answer")
+
+        response = self.client.post(
+            "/run",
+            json={"query": "Question", "conversation_id": "conversation-1",
+                  "session_id": "session-1", "message_id": "message-1", "username": "demo-user"},
+            headers=self._headers(),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.rate_limiter.check_and_consume.assert_not_called()
+
+    @patch("astroweave.api.main._conversation_store")
+    def test_usage_endpoint_reports_quota(self, _mock_store):
+        self.rate_limiter.usage_today.return_value = {
+            "day": "2026-10-16", "resets_in_seconds": 3600,
+            "user": {"used": 2, "limit": 50, "remaining": 48},
+            "global": {"used": 2, "limit": None, "remaining": None},
+        }
+
+        response = self.client.get("/usage", headers=self._headers())
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["user"]["remaining"], 48)
+        self.rate_limiter.usage_today.assert_called_once_with("demo-user")
 
     def test_run_requires_query(self):
         response = self.client.post(

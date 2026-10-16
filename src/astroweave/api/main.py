@@ -20,6 +20,7 @@ from astroweave.common.conversation import (
     ConversationInProgressError,
     ConversationStore,
 )
+from astroweave.common.ratelimit import RateLimiter
 from astroweave.common.security import create_user_token, verify_user_token
 from astroweave.common.tools.chart_client import ChartServiceUnavailable
 from astroweave.graphs.orchestrator.orchestrator_graph import build_orchestrator_graph
@@ -35,6 +36,7 @@ app = FastAPI(
 
 _orchestrator_graph = build_orchestrator_graph()
 _conversation_store = ConversationStore()
+_rate_limiter = RateLimiter()
 
 
 class BirthDetails(BaseModel):
@@ -124,6 +126,12 @@ def current_user(username: str = Depends(authenticated_username)) -> dict:
     if user is None:
         raise HTTPException(status_code=401, detail="Account not found.")
     return {"user": user}
+
+
+@app.get("/usage")
+def usage(username: str = Depends(authenticated_username)) -> dict:
+    """Today's run count and remaining daily quota for the signed-in user."""
+    return _rate_limiter.usage_today(username)
 
 
 def _request_fingerprint(request: RunRequest) -> str:
@@ -278,6 +286,27 @@ def run(
             },
             "execution_trace": [],
         }
+
+    # Past the replay check this run will call the paid model, so it consumes a
+    # daily budget slot. Over the cap, release the claim (so the same message_id
+    # can be retried tomorrow) and refuse with 429.
+    budget = _rate_limiter.check_and_consume(authenticated_user)
+    if not budget.allowed:
+        _conversation_store.release_request(request.message_id, request_claim_token)
+        logger.warning(
+            "Run refused by rate limit scope=%s owner=%s used=%s limit=%s",
+            budget.scope, authenticated_user, budget.used, budget.limit,
+        )
+        message = (
+            "Daily request limit reached. Please try again tomorrow."
+            if budget.scope == "user"
+            else "The service has reached its daily capacity. Please try again tomorrow."
+        )
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={"code": "rate_limited", "scope": budget.scope, "limit": budget.limit, "message": message},
+            headers={"Retry-After": str(budget.retry_after_seconds or 3600)},
+        )
 
     context = {
         "conversation_id": conversation_id,
