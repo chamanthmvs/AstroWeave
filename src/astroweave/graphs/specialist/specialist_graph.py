@@ -55,6 +55,7 @@ def _executor(state: State) -> State:
         return {"errors": [str(error)], "specialist_results": []}
 
     llm = get_llm("specialist", agent_name=specialist_name)
+    usages: list[dict] = []
     try:
         parsed = invoke_json_response(
             f"{specialist_name}_executor",
@@ -64,13 +65,15 @@ def _executor(state: State) -> State:
                 HumanMessage(content=user_content),
             ],
             json_schema=SPECIALIST_OUTPUT_SCHEMA,
+            usages=usages,
         )
     except ValueError as error:
-        return {"errors": [str(error)], "specialist_results": []}
+        return {"errors": [str(error)], "specialist_results": [], "token_usage": usages}
 
     return {
         "specialist_analysis": _as_text(parsed.get("analysis")),
         "evaluation": parsed.get("confidence", ""),
+        "token_usage": usages,
         "specialist_results": [
             {
                 "specialist": specialist_name,

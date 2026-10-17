@@ -22,6 +22,7 @@ from astroweave.common.conversation import (
 )
 from astroweave.common.ratelimit import RateLimiter
 from astroweave.common.security import create_user_token, verify_user_token
+from astroweave.common.usage import UsageStore
 from astroweave.common.tools.chart_client import ChartServiceUnavailable
 from astroweave.graphs.orchestrator.orchestrator_graph import build_orchestrator_graph
 from astroweave.orchestration.dispatcher.dispatcher import execute_specialist
@@ -37,6 +38,7 @@ app = FastAPI(
 _orchestrator_graph = build_orchestrator_graph()
 _conversation_store = ConversationStore()
 _rate_limiter = RateLimiter()
+_usage_store = UsageStore()
 
 
 class BirthDetails(BaseModel):
@@ -132,6 +134,25 @@ def current_user(username: str = Depends(authenticated_username)) -> dict:
 def usage(username: str = Depends(authenticated_username)) -> dict:
     """Today's run count and remaining daily quota for the signed-in user."""
     return _rate_limiter.usage_today(username)
+
+
+def _admin_emails() -> set[str]:
+    """Admins are operator-controlled via ASTROWEAVE_ADMIN_EMAILS (comma-separated),
+    so there is no in-app way to grant admin and no default admin."""
+    raw = os.environ.get("ASTROWEAVE_ADMIN_EMAILS", "")
+    return {email.strip().lower() for email in raw.split(",") if email.strip()}
+
+
+def authenticated_admin(username: str = Depends(authenticated_username)) -> str:
+    if username.strip().lower() not in _admin_emails():
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admin access required.")
+    return username
+
+
+@app.get("/admin/summary")
+def admin_summary(_admin: str = Depends(authenticated_admin)) -> dict:
+    """Usage and cost analytics across all users (admin only)."""
+    return _usage_store.summary()
 
 
 def _request_fingerprint(request: RunRequest) -> str:
@@ -339,6 +360,14 @@ def run(
             assistant_content=final_state.get("answer", ""),
             request_fingerprint=request_fingerprint, claim_token=request_claim_token,
         )
+        # Record token usage/cost for this run; never let accounting fail the request.
+        try:
+            _usage_store.record_run(
+                authenticated_user, conversation_id, request.message_id,
+                final_state.get("token_usage") or [],
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("Failed to record usage for message_id=%s", request.message_id)
     except ConversationAccessError as error:
         _conversation_store.release_request(request.message_id, request_claim_token)
         logger.warning(
@@ -413,3 +442,8 @@ if _FRONTEND_DIR.is_dir():
     @app.get("/", include_in_schema=False)
     def spa_index() -> FileResponse:
         return FileResponse(_FRONTEND_DIR / "index.html")
+
+    @app.get("/admin", include_in_schema=False)
+    def admin_page() -> FileResponse:
+        # The shell is public; the data it loads from /admin/summary is admin-gated.
+        return FileResponse(_FRONTEND_DIR / "admin.html")

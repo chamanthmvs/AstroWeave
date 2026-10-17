@@ -64,3 +64,6 @@ class State(TypedDict, total=False):
     answer: str
     errors: Annotated[list[str], operator.add]
     is_sufficient: bool
+    # One record per model call (routing, each specialist, synthesis); summed
+    # across the graph and persisted after the run for usage/cost analytics.
+    token_usage: Annotated[list[dict[str, Any]], operator.add]

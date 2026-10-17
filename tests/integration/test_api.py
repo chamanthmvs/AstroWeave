@@ -29,6 +29,10 @@ class ApiTests(unittest.TestCase):
         self.rate_limiter = limiter.start()
         self.addCleanup(limiter.stop)
         self.rate_limiter.check_and_consume.return_value = RateLimitResult(allowed=True)
+        # Keep the real usage DB out of the tests.
+        usage = patch("astroweave.api.main._usage_store")
+        self.usage_store = usage.start()
+        self.addCleanup(usage.stop)
 
     def test_health(self):
         response = self.client.get("/health")
@@ -177,6 +181,29 @@ class ApiTests(unittest.TestCase):
 
     @patch("astroweave.api.main._orchestrator_graph")
     @patch("astroweave.api.main._conversation_store")
+    def test_run_records_token_usage(self, mock_store, mock_graph):
+        mock_store.request_ids.return_value = None
+        mock_store.load_context_messages.return_value = ([], [])
+        mock_store.claim_request.return_value = ("claim-token", None)
+        mock_graph.invoke.return_value = {
+            "answer": "ok",
+            "token_usage": [{"model": "claude-opus-5-5", "input_tokens": 1000, "output_tokens": 500, "cache_read_tokens": 0}],
+        }
+
+        response = self.client.post(
+            "/run",
+            json={"query": "Will I get a new job this year?", "username": "demo-user"},
+            headers=self._headers(),
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.usage_store.record_run.assert_called_once()
+        args = self.usage_store.record_run.call_args.args
+        self.assertEqual(args[0], "demo-user")  # owner
+        self.assertEqual(args[3][0]["model"], "claude-opus-5-5")  # usage list passed through
+
+    @patch("astroweave.api.main._orchestrator_graph")
+    @patch("astroweave.api.main._conversation_store")
     def test_run_refused_when_rate_limited(self, mock_store, mock_graph):
         from astroweave.common.ratelimit import RateLimitResult
 
@@ -228,6 +255,28 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["user"]["remaining"], 48)
         self.rate_limiter.usage_today.assert_called_once_with("demo-user")
+
+    def test_admin_summary_requires_an_admin_email(self):
+        self.usage_store.summary.return_value = {"overall": {"runs": 0}, "by_user": [], "by_day": [], "by_model": []}
+        # demo-user is not in the (empty) admin allowlist.
+        with patch.dict("os.environ", {"ASTROWEAVE_ADMIN_EMAILS": ""}):
+            forbidden = self.client.get("/admin/summary", headers=self._headers())
+        self.assertEqual(forbidden.status_code, 403)
+        self.usage_store.summary.assert_not_called()
+
+        with patch.dict("os.environ", {"ASTROWEAVE_ADMIN_EMAILS": "boss@astroweave.com, demo-user"}):
+            allowed = self.client.get("/admin/summary", headers=self._headers())
+        self.assertEqual(allowed.status_code, 200)
+        self.assertEqual(allowed.json()["overall"]["runs"], 0)
+        self.usage_store.summary.assert_called_once()
+
+    def test_admin_summary_requires_a_token(self):
+        self.assertEqual(self.client.get("/admin/summary").status_code, 401)
+
+    def test_admin_page_is_served(self):
+        response = self.client.get("/admin")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("text/html", response.headers["content-type"])
 
     def test_run_requires_query(self):
         response = self.client.post(

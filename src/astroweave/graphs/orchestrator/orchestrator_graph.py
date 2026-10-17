@@ -16,6 +16,7 @@ from astroweave.common.llm import (
     invoke_json_response,
 )
 from astroweave.common.state import State
+from astroweave.common.usage import usage_from_response
 from astroweave.methodologies import normalize_methodology
 from astroweave.orchestration.dispatcher.dispatcher import _get_chart_data, execute_specialist
 from astroweave.orchestration.manager.manager import run_manager
@@ -53,6 +54,7 @@ def _classify_request(state: State, runtime: Runtime[Context]) -> State:
     )
 
     llm = get_llm("orchestrator")
+    usages: list[dict] = []
     try:
         enforce_context_limit("classify-request", user_content)
         parsed = invoke_json_response(
@@ -63,9 +65,10 @@ def _classify_request(state: State, runtime: Runtime[Context]) -> State:
                 HumanMessage(content=user_content),
             ],
             json_schema=ORCHESTRATOR_ROUTING_SCHEMA,
+            usages=usages,
         )
     except (ContextLimitExceededError, ValueError) as error:
-        return {"errors": [str(error)]}
+        return {"errors": [str(error)], "token_usage": usages}
 
     requested_specialists = parsed.get("specialists") or []
     specialists = [
@@ -94,6 +97,7 @@ def _classify_request(state: State, runtime: Runtime[Context]) -> State:
         "methodology": methodology,
         "plan": plan,
         "task_dependencies": parsed.get("tasks"),
+        "token_usage": usages,
     }
 
 
@@ -180,11 +184,13 @@ def _run_stage(state: State, runtime: Runtime[Context]) -> State:
 
     results = [result for update in updates for result in update.get("specialist_results", [])]
     errors = [error for update in updates for error in update.get("errors", [])]
+    usages = [usage for update in updates for usage in update.get("token_usage", [])]
     completed = list(state.get("completed_tasks") or []) + stage
     return {
         "chart_data": chart_data,
         "specialist_results": results,
         "errors": errors,
+        "token_usage": usages,
         "task_stages": stages[1:],
         "pending_tasks": [task for task in state.get("pending_tasks", []) if task not in stage],
         "completed_tasks": completed,
@@ -241,7 +247,8 @@ def _synthesize_response(state: State) -> State:
             HumanMessage(content=user_content),
         ]
     )
-    return {"answer": response.content}
+    usage = usage_from_response(response)
+    return {"answer": response.content, "token_usage": [usage] if usage else []}
 
 
 def _route_after_context_resolution(state: Mapping[str, object]) -> str:

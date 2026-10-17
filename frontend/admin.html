@@ -1,0 +1,189 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AstroWeave · Admin usage</title>
+  <meta name="description" content="Token usage and cost analytics across all users." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --ink:#e9e7f5; --muted:#9c98c6; --faint:#6f6a99; --line:rgba(173,163,232,.16);
+      --bg:#0b0a22; --panel:#141233; --panel-2:#1a1744; --gold:#e8b55c; --mono:"DM Mono",monospace;
+      color-scheme:dark;
+    }
+    * { box-sizing:border-box; }
+    body { margin:0; background:radial-gradient(130% 90% at 50% -20%, #1a1c46 0%, #10112f 45%, #0a0920 100%) fixed;
+      color:var(--ink); font-family:"Manrope",system-ui,sans-serif; line-height:1.6; }
+    a { color:var(--gold); }
+    .wrap { width:min(1080px, calc(100% - 40px)); margin:0 auto; padding:2.4rem 0 4rem; }
+    header { display:flex; align-items:baseline; justify-content:space-between; gap:1rem; flex-wrap:wrap; margin-bottom:1.6rem; }
+    h1 { font-size:1.5rem; margin:0; letter-spacing:-.01em; }
+    .eyebrow { text-transform:uppercase; letter-spacing:.16em; font:600 .68rem/1 var(--mono); color:var(--gold); }
+    .back { font-size:.85rem; color:var(--muted); text-decoration:none; }
+    .back:hover { color:var(--ink); }
+    .note { color:var(--muted); font-size:.95rem; }
+    .msg { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:1.4rem 1.6rem; }
+
+    /* Stat tiles (hero numbers) */
+    .tiles { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:22px; }
+    .tile { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:1rem 1.1rem; }
+    .tile .k { font:500 .7rem/1.2 var(--mono); letter-spacing:.08em; text-transform:uppercase; color:var(--muted); }
+    .tile .v { font-weight:800; font-size:1.7rem; margin-top:.35rem; letter-spacing:-.02em; }
+    .tile .v small { font-weight:600; font-size:.9rem; color:var(--muted); }
+
+    .card { background:var(--panel); border:1px solid var(--line); border-radius:16px; padding:1.3rem 1.4rem; margin-bottom:18px; }
+    .card h2 { font-size:1.02rem; margin:0 0 1rem; }
+    .card h2 span { color:var(--faint); font:400 .8rem var(--mono); margin-left:.5rem; }
+
+    /* Daily-cost bars: one measure, one hue (magnitude over time) */
+    .chart { display:flex; align-items:flex-end; gap:2px; height:180px; padding-top:8px; border-bottom:1px solid var(--line); position:relative; }
+    .bar { flex:1 1 0; min-width:3px; background:linear-gradient(180deg, var(--gold), #c79140); border-radius:4px 4px 0 0; opacity:.85; transition:opacity .12s; min-height:2px; }
+    .bar:hover { opacity:1; }
+    .xaxis { display:flex; gap:2px; margin-top:6px; }
+    .xaxis span { flex:1 1 0; text-align:center; font:400 .62rem var(--mono); color:var(--faint); white-space:nowrap; overflow:hidden; }
+    .chart-max { position:absolute; top:0; right:0; font:400 .66rem var(--mono); color:var(--faint); }
+
+    table { width:100%; border-collapse:collapse; font-size:.9rem; }
+    th, td { text-align:right; padding:.55rem .6rem; border-bottom:1px solid var(--line); }
+    th:first-child, td:first-child { text-align:left; }
+    th { font:600 .68rem/1 var(--mono); letter-spacing:.06em; text-transform:uppercase; color:var(--muted); }
+    td.owner { font-weight:600; max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .mini { position:relative; }
+    .mini i { display:inline-block; height:7px; border-radius:4px; background:var(--gold); opacity:.8; vertical-align:middle; margin-right:8px; }
+    .num { font-variant-numeric:tabular-nums; }
+
+    #tooltip { position:fixed; pointer-events:none; z-index:10; background:var(--panel-2); border:1px solid var(--line);
+      border-radius:8px; padding:.5rem .6rem; font-size:.8rem; box-shadow:0 10px 30px rgba(0,0,0,.4); opacity:0; transition:opacity .1s; }
+    #tooltip b { color:var(--gold); }
+    @media (max-width:720px){ .tiles { grid-template-columns:repeat(2,1fr); } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div><div class="eyebrow">AstroWeave · Admin</div><h1>Usage &amp; cost</h1></div>
+      <a class="back" href="/">← Back to app</a>
+    </header>
+    <div id="root"><div class="msg note">Loading…</div></div>
+  </div>
+  <div id="tooltip"></div>
+
+  <script>
+    (function () {
+      var root = document.getElementById("root");
+      var tip = document.getElementById("tooltip");
+      var token = null;
+      try { token = localStorage.getItem("astroweave:token"); } catch (e) {}
+
+      function money(x) {
+        x = Number(x) || 0;
+        if (x === 0) return "$0";
+        return x >= 1 ? "$" + x.toFixed(2) : "$" + x.toFixed(4);
+      }
+      var compact = new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 });
+      function esc(s) { var d = document.createElement("div"); d.textContent = s == null ? "" : String(s); return d.innerHTML; }
+
+      if (!token) {
+        root.innerHTML = '<div class="msg">You are not signed in. <a href="/">Open the app</a>, sign in, then reopen this page.</div>';
+        return;
+      }
+
+      fetch("/admin/summary", { headers: { Authorization: "Bearer " + token } })
+        .then(function (r) {
+          if (r.status === 401) throw { kind: "auth" };
+          if (r.status === 403) throw { kind: "forbidden" };
+          if (!r.ok) throw { kind: "error", status: r.status };
+          return r.json();
+        })
+        .then(render)
+        .catch(function (e) {
+          if (e && e.kind === "forbidden")
+            root.innerHTML = '<div class="msg">This account does not have admin access. Ask an operator to add your email to <code>ASTROWEAVE_ADMIN_EMAILS</code>.</div>';
+          else if (e && e.kind === "auth")
+            root.innerHTML = '<div class="msg">Your session expired. <a href="/">Sign in again</a>, then reopen this page.</div>';
+          else
+            root.innerHTML = '<div class="msg">Could not load usage data' + (e && e.status ? " (HTTP " + e.status + ")" : "") + ".</div>";
+        });
+
+      function tile(k, v, sub) {
+        return '<div class="tile"><div class="k">' + k + '</div><div class="v">' + v +
+          (sub ? ' <small>' + sub + "</small>" : "") + "</div></div>";
+      }
+
+      function render(data) {
+        var o = data.overall || {};
+        if (!o.runs) { root.innerHTML = '<div class="msg note">No usage has been recorded yet. Once questions are answered, spend shows up here.</div>'; return; }
+
+        var tiles = '<div class="tiles">' +
+          tile("Total cost", money(o.cost_usd)) +
+          tile("Runs", compact.format(o.runs || 0)) +
+          tile("Tokens", compact.format(o.tokens || 0)) +
+          tile("Active users", compact.format(o.users || 0)) +
+          "</div>";
+
+        // Daily cost — one measure, one hue, over time.
+        var days = data.by_day || [];
+        var maxCost = days.reduce(function (m, d) { return Math.max(m, d.cost_usd || 0); }, 0) || 1;
+        var bars = days.map(function (d) {
+          var h = Math.max(2, Math.round((d.cost_usd || 0) / maxCost * 100));
+          return '<div class="bar" style="height:' + h + '%" data-day="' + esc(d.day) +
+            '" data-cost="' + money(d.cost_usd) + '" data-runs="' + (d.runs || 0) + '"></div>';
+        }).join("");
+        var labels = days.map(function (d, i) {
+          var show = days.length <= 10 || i === 0 || i === days.length - 1 || i === (days.length >> 1);
+          return "<span>" + (show ? esc(d.day.slice(5)) : "") + "</span>";
+        }).join("");
+        var chart = '<div class="card"><h2>Daily cost <span>last ' + days.length + ' day(s), USD</span></h2>' +
+          '<div class="chart"><div class="chart-max">max ' + money(maxCost) + "</div>" + bars + "</div>" +
+          '<div class="xaxis">' + labels + "</div></div>";
+
+        root.innerHTML = tiles + chart +
+          '<div class="card"><h2>By model</h2>' + modelTable(data.by_model || []) + "</div>" +
+          '<div class="card"><h2>By user <span>top ' + (data.by_user || []).length + ' by cost</span></h2>' + userTable(data.by_user || []) + "</div>";
+
+        bindTips();
+      }
+
+      function modelTable(rows) {
+        var maxCost = rows.reduce(function (m, r) { return Math.max(m, r.cost_usd || 0); }, 0) || 1;
+        var body = rows.map(function (r) {
+          var w = Math.max(3, Math.round((r.cost_usd || 0) / maxCost * 120));
+          return "<tr><td class='owner'>" + esc(r.model) + "</td>" +
+            "<td class='num'>" + compact.format(r.runs || 0) + "</td>" +
+            "<td class='num'>" + compact.format(r.tokens || 0) + "</td>" +
+            "<td class='num mini'><i style='width:" + w + "px'></i>" + money(r.cost_usd) + "</td></tr>";
+        }).join("");
+        return "<table><thead><tr><th>Model</th><th>Runs</th><th>Tokens</th><th>Cost</th></tr></thead><tbody>" + body + "</tbody></table>";
+      }
+
+      function userTable(rows) {
+        var maxCost = rows.reduce(function (m, r) { return Math.max(m, r.cost_usd || 0); }, 0) || 1;
+        var body = rows.map(function (r) {
+          var w = Math.max(3, Math.round((r.cost_usd || 0) / maxCost * 120));
+          return "<tr><td class='owner' title='" + esc(r.owner) + "'>" + esc(r.owner) + "</td>" +
+            "<td class='num'>" + compact.format(r.runs || 0) + "</td>" +
+            "<td class='num'>" + compact.format(r.input_tokens || 0) + "</td>" +
+            "<td class='num'>" + compact.format(r.output_tokens || 0) + "</td>" +
+            "<td class='num mini'><i style='width:" + w + "px'></i>" + money(r.cost_usd) + "</td></tr>";
+        }).join("");
+        return "<table><thead><tr><th>User</th><th>Runs</th><th>Input</th><th>Output</th><th>Cost</th></tr></thead><tbody>" + body + "</tbody></table>";
+      }
+
+      function bindTips() {
+        document.querySelectorAll(".bar").forEach(function (bar) {
+          bar.addEventListener("mousemove", function (e) {
+            tip.innerHTML = "<b>" + bar.dataset.cost + "</b> · " + bar.dataset.runs + " run(s)<br>" + bar.dataset.day;
+            tip.style.opacity = "1";
+            tip.style.left = Math.min(e.clientX + 14, window.innerWidth - 160) + "px";
+            tip.style.top = (e.clientY + 14) + "px";
+          });
+          bar.addEventListener("mouseleave", function () { tip.style.opacity = "0"; });
+        });
+      }
+    })();
+  </script>
+</body>
+</html>

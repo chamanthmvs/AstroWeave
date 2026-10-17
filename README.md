@@ -166,6 +166,24 @@ Over the cap, `/run` returns **HTTP 429** (`code: rate_limited`) with a
 `Retry-After` header. `GET /usage` reports the signed-in user's runs used and
 remaining today. Counts live in the same SQLite database (`usage_daily` table).
 
+### Token usage and cost
+
+Each run's token usage is captured from every model call (routing, each
+specialist, synthesis) and written to the `usage_events` table — one row per
+model per run, with the dollar cost computed from an editable per-model price
+table at write time. Only counts, model names, ids and cost are stored, never
+the text of a question or answer. This is the data behind per-user spend
+reporting and cost-aware evaluations.
+
+### Admin dashboard
+
+Set `ASTROWEAVE_ADMIN_EMAILS` (comma-separated) to the accounts that may see
+analytics. Those users can open **`/admin`** — a dashboard of total cost, runs,
+tokens, a daily-cost chart, and per-model and per-user breakdowns — backed by the
+admin-only `GET /admin/summary`. The page shell is public but shows nothing
+without an admin token; there is no in-app way to grant admin and no default
+admin.
+
 ### Chart data
 
 The chart service computes the Parashari sections with the **Lahiri** ayanamsa

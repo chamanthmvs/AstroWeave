@@ -42,3 +42,8 @@ app/data/*.db-journal
 # Agent-oriented project context notes (not for the repo history).
 PROJECT_CONTEXT.md
 CLAUDE.md
+# Eval run outputs (keep the case set + _state.json; drop generated run data).
+.claude/hillclimb/**/baseline/
+.claude/hillclimb/**/v[0-9]*/
+.claude/hillclimb/**/report.html
+.claude/hillclimb/**/trajectory/

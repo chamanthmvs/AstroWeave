@@ -120,6 +120,7 @@ def execute_specialist(
         "chart_data": chart_data,
         "specialist_results": specialist_results,
         "errors": errors,
+        "token_usage": result.get("token_usage", []),
     }
 
 

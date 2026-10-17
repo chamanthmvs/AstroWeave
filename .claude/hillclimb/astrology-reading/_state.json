@@ -1,0 +1,19 @@
+{
+  "flow": "astrology-reading",
+  "metrics": [
+    {"id": "pass", "label": "Pass", "kind": "binary"},
+    {"id": "grounded", "label": "Grounded", "kind": "binary"},
+    {"id": "honest_limits", "label": "Honest limits", "kind": "binary"},
+    {"id": "no_sugarcoating", "label": "No sugar-coat", "kind": "binary"},
+    {"id": "directly_answers", "label": "Direct", "kind": "binary"},
+    {"id": "follows_method", "label": "Method", "kind": "binary"},
+    {"id": "dates_ok", "label": "Dates in data", "kind": "binary"},
+    {"id": "no_label_leak", "label": "No label leak", "kind": "binary"},
+    {"id": "cites_factors", "label": "Cites factors", "kind": "binary"}
+  ],
+  "perf_fields": ["latency_s", "cost_usd"],
+  "prices": {
+    "claude-opus-5-5": {"in": 4.0, "out": 20.0},
+    "claude-sonnet-5-5": {"in": 2.0, "out": 10.0}
+  }
+}

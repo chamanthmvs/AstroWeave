@@ -4,6 +4,7 @@ import json
 from typing import Any
 
 from astroweave.common.config import get_logger
+from astroweave.common.usage import usage_from_response
 
 logger = get_logger(__name__)
 
@@ -45,12 +46,16 @@ def invoke_json_response(
     messages: list[Any],
     max_attempts: int = 2,
     json_schema: dict[str, Any] | None = None,
+    usages: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Invoke an LLM and retry once when its JSON response is malformed.
 
     When the model declares `supports_json_schema = True` (the Claude adapter),
     `json_schema` is sent as a structured output so the reply is guaranteed to
     match it; other providers rely on the prompt's JSON instructions.
+
+    When a `usages` list is given, each attempt's token usage is appended to it
+    (every attempt is billed, so retries are counted too) for cost accounting.
     """
 
     if max_attempts < 1:
@@ -60,6 +65,10 @@ def invoke_json_response(
     last_error: ValueError | None = None
     for attempt in range(1, max_attempts + 1):
         response = llm.invoke(messages, json_schema=json_schema) if use_schema else llm.invoke(messages)
+        if usages is not None:
+            usage = usage_from_response(response)
+            if usage:
+                usages.append(usage)
         content = response.content
         metadata = getattr(response, "response_metadata", {}) or {}
         logger.info(
