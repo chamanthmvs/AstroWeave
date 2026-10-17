@@ -501,6 +501,84 @@ class ApiTests(unittest.TestCase):
         self.assertEqual(response.status_code, 403)
 
 
+class PasswordResetTests(unittest.TestCase):
+    """End-to-end reset/change-password against a real temp auth DB (no LLM)."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.client = TestClient(app)
+
+    def setUp(self):
+        import tempfile
+        from pathlib import Path
+        from app import auth
+
+        self._dir = tempfile.TemporaryDirectory()
+        self.addCleanup(self._dir.cleanup)
+        db = Path(self._dir.name) / "auth.db"
+        conn = auth.get_connection(db)
+        auth.create_user(conn, "u@example.com", "U", "original-pass-1", {
+            "date": "1990-01-01", "time": "12:00:00", "place_name": "Chennai",
+            "latitude": 13.08, "longitude": 80.27, "utc_offset_hours": 5.5, "date_known": True,
+        })
+        conn.close()
+        patcher = patch("app.auth.DB_PATH", db)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        secret = patch.dict("os.environ", {"ASTROWEAVE_AUTH_SECRET": "reset-test-secret"})
+        secret.start()
+        self.addCleanup(secret.stop)
+
+    def _token(self, username="u@example.com"):
+        from astroweave.common.security import create_user_token
+        return {"Authorization": f"Bearer {create_user_token(username)}"}
+
+    def test_request_reset_is_generic_for_any_email(self):
+        known = self.client.post("/auth/request-reset", json={"email": "u@example.com"})
+        unknown = self.client.post("/auth/request-reset", json={"email": "nobody@example.com"})
+        # Identical response => no account enumeration.
+        self.assertEqual(known.status_code, 200)
+        self.assertEqual(known.json(), unknown.json())
+
+    def test_admin_can_mint_a_reset_token_and_it_resets_the_password(self):
+        from astroweave.common.security import create_user_token
+
+        with patch.dict("os.environ", {"ASTROWEAVE_ADMIN_EMAILS": "admin@astroweave.com"}):
+            minted = self.client.post(
+                "/admin/reset-token", json={"email": "u@example.com"},
+                headers={"Authorization": f"Bearer {create_user_token('admin@astroweave.com')}"},
+            )
+        self.assertEqual(minted.status_code, 200)
+        token = minted.json()["reset_token"]
+
+        ok = self.client.post("/auth/reset", json={"token": token, "new_password": "brand-new-pass-9"})
+        self.assertEqual(ok.status_code, 200)
+        # New password works; the token is now single-use (spent).
+        self.assertEqual(self.client.post("/auth/sign-in", json={"email": "u@example.com", "password": "brand-new-pass-9"}).status_code, 200)
+        reused = self.client.post("/auth/reset", json={"token": token, "new_password": "another-pass-10"})
+        self.assertEqual(reused.status_code, 400)
+
+    def test_reset_rejects_short_password_and_bad_token(self):
+        self.assertEqual(self.client.post("/auth/reset", json={"token": "x.y.z", "new_password": "longenough1"}).status_code, 400)
+        from astroweave.common.security import create_reset_token
+        from app import auth
+        with auth.get_connection() as conn:
+            token = create_reset_token("u@example.com", auth.get_password_hash(conn, "u@example.com"))
+        self.assertEqual(self.client.post("/auth/reset", json={"token": token, "new_password": "short"}).status_code, 422)
+
+    def test_change_password_requires_the_correct_current_password(self):
+        wrong = self.client.post("/auth/change-password", json={"current_password": "nope", "new_password": "new-pass-1234"}, headers=self._token())
+        self.assertEqual(wrong.status_code, 403)
+        ok = self.client.post("/auth/change-password", json={"current_password": "original-pass-1", "new_password": "new-pass-1234"}, headers=self._token())
+        self.assertEqual(ok.status_code, 200)
+        self.assertEqual(self.client.post("/auth/sign-in", json={"email": "u@example.com", "password": "new-pass-1234"}).status_code, 200)
+
+    def test_admin_reset_token_requires_admin(self):
+        with patch.dict("os.environ", {"ASTROWEAVE_ADMIN_EMAILS": ""}):
+            r = self.client.post("/admin/reset-token", json={"email": "u@example.com"}, headers=self._token())
+        self.assertEqual(r.status_code, 403)
+
+
 if __name__ == "__main__":
     unittest.main()
 

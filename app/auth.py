@@ -185,3 +185,21 @@ def authenticate_user(
         return None
     logger.info("Authentication succeeded email=%s", email)
     return _row_to_user(row)
+
+
+def get_password_hash(connection: sqlite3.Connection, email: str) -> str | None:
+    """The stored scrypt hash for an account, used to bind/verify reset tokens."""
+    row = connection.execute("SELECT password_hash FROM users WHERE email = ?", (email,)).fetchone()
+    return row["password_hash"] if row else None
+
+
+def update_password(connection: sqlite3.Connection, email: str, new_password: str) -> bool:
+    """Set a new password hash. Returns False if the account doesn't exist."""
+    cursor = connection.execute(
+        "UPDATE users SET password_hash = ? WHERE email = ?",
+        (_password_hash(new_password), email),
+    )
+    connection.commit()
+    changed = cursor.rowcount > 0
+    logger.info("Password %s email=%s", "updated" if changed else "update skipped (no account)", email)
+    return changed

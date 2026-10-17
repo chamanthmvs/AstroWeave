@@ -138,7 +138,46 @@
         $$("[data-auth-tab]").forEach(function (t) { t.classList.toggle("active", t === tab); });
         $("#signin-form").classList.toggle("hidden", which !== "signin");
         $("#register-form").classList.toggle("hidden", which !== "register");
+        $("#reset-form").classList.add("hidden");
       });
+    });
+
+    // Forgot password: swap the sign-in form for the reset form and back.
+    $("[data-forgot]").addEventListener("click", function () {
+      $("#signin-form").classList.add("hidden");
+      $("#reset-form").classList.remove("hidden");
+    });
+    $("[data-back-to-signin]").addEventListener("click", function () {
+      $("#reset-form").classList.add("hidden");
+      $("#signin-form").classList.remove("hidden");
+    });
+
+    var resetForm = $("#reset-form");
+    $("[data-request-reset]", resetForm).addEventListener("click", function () {
+      var status = $("[data-reset-status]", resetForm), errEl = $("[data-error]", resetForm);
+      errEl.textContent = "";
+      var email = resetForm.email.value.trim();
+      if (!email) { errEl.textContent = "Enter your email first."; return; }
+      api("/auth/request-reset", { method: "POST", body: { email: email } }).then(function (data) {
+        status.textContent = data.message || "If that account exists, a reset was created. Ask an admin for your reset code.";
+      }).catch(function (err) { errEl.textContent = errorMessage(err); });
+    });
+    resetForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var status = $("[data-reset-status]", resetForm), errEl = $("[data-error]", resetForm);
+      errEl.textContent = "";
+      if (resetForm.new_password.value.length < 8) { errEl.textContent = "New password must be at least 8 characters."; return; }
+      var btn = $("button[type=submit]", resetForm);
+      btn.disabled = true; btn.textContent = "Resetting…";
+      api("/auth/reset", { method: "POST", body: {
+        token: resetForm.token.value.trim(), new_password: resetForm.new_password.value,
+      } }).then(function () {
+        status.textContent = "Password reset. You can sign in now.";
+        resetForm.reset();
+        setTimeout(function () { $("[data-back-to-signin]", resetForm).click(); }, 1200);
+      }).catch(function (err) {
+        errEl.textContent = err.status === 400 ? "That reset code is invalid or has expired." : errorMessage(err);
+      }).finally(function () { btn.disabled = false; btn.textContent = "Reset password"; });
     });
 
     // Sign in
@@ -459,6 +498,29 @@
     $("[data-signout]").addEventListener("click", signOut);
     $("[data-menu]").addEventListener("click", openNav);
     $("[data-scrim]").addEventListener("click", closeNav);
+
+    // Change password (signed in)
+    var cpForm = $("[data-change-password-form]");
+    $("[data-change-password]").addEventListener("click", function () {
+      cpForm.classList.toggle("hidden");
+    });
+    cpForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var ok = $("[data-cp-status]", cpForm), errEl = $("[data-cp-error]", cpForm);
+      ok.textContent = ""; errEl.textContent = "";
+      if (cpForm.new_password.value.length < 8) { errEl.textContent = "New password must be at least 8 characters."; return; }
+      var btn = $("button[type=submit]", cpForm);
+      btn.disabled = true; btn.textContent = "Updating…";
+      api("/auth/change-password", { method: "POST", body: {
+        current_password: cpForm.current_password.value, new_password: cpForm.new_password.value,
+      } }).then(function () {
+        ok.textContent = "Password changed.";
+        cpForm.reset();
+        setTimeout(function () { cpForm.classList.add("hidden"); ok.textContent = ""; }, 1500);
+      }).catch(function (err) {
+        errEl.textContent = err.status === 403 ? "Current password is incorrect." : errorMessage(err);
+      }).finally(function () { btn.disabled = false; btn.textContent = "Update password"; });
+    });
 
     var form = $("[data-run-form]");
     var textarea = form.query;

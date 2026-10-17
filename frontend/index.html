@@ -47,6 +47,31 @@
         </label>
         <button type="submit" class="btn-primary" style="width:100%">Continue</button>
         <div class="error-text" data-error></div>
+        <button type="button" class="link-btn" data-forgot>Forgot password?</button>
+      </form>
+
+      <!-- Password reset (no email: an admin hands over the reset code) -->
+      <form id="reset-form" class="hidden">
+        <p class="note" style="margin-bottom:0.8rem">Enter your email to start a reset. Since this is a development setup, an administrator provides your one-time reset code; paste it below with a new password.</p>
+        <div class="geo-row">
+          <label class="field" style="flex:1">
+            <span class="field-label">Email</span>
+            <input type="email" name="email" autocomplete="email" placeholder="you@example.com" />
+          </label>
+          <button type="button" class="btn-ghost" data-request-reset>Start</button>
+        </div>
+        <label class="field">
+          <span class="field-label">Reset code</span>
+          <input name="token" placeholder="Paste the reset code" autocomplete="one-time-code" />
+        </label>
+        <label class="field">
+          <span class="field-label">New password</span>
+          <input type="password" name="new_password" autocomplete="new-password" placeholder="At least 8 characters" />
+        </label>
+        <button type="submit" class="btn-primary" style="width:100%">Reset password</button>
+        <div class="ok-text" data-reset-status></div>
+        <div class="error-text" data-error></div>
+        <button type="button" class="link-btn" data-back-to-signin>← Back to sign in</button>
       </form>
 
       <!-- Register -->
@@ -116,8 +141,23 @@
           <div class="user-name" data-user-name>—</div>
           <div class="user-email" data-user-email>—</div>
         </div>
+        <button class="icon-btn" data-change-password title="Change password">🔑</button>
         <button class="icon-btn" data-signout title="Sign out">⎋</button>
       </div>
+
+      <form class="change-password hidden" data-change-password-form>
+        <label class="field">
+          <span class="field-label">Current password</span>
+          <input type="password" name="current_password" autocomplete="current-password" />
+        </label>
+        <label class="field">
+          <span class="field-label">New password</span>
+          <input type="password" name="new_password" autocomplete="new-password" placeholder="At least 8 characters" />
+        </label>
+        <button type="submit" class="btn-primary" style="width:100%">Update password</button>
+        <div class="ok-text" data-cp-status></div>
+        <div class="error-text" data-cp-error></div>
+      </form>
     </aside>
 
     <main class="main">

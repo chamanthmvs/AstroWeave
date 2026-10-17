@@ -13,6 +13,7 @@ logger = get_logger(__name__)
 
 _DEVELOPMENT_SECRET = "astroweave-local-development-only"
 _TOKEN_LIFETIME_SECONDS = 12 * 60 * 60
+_RESET_TOKEN_LIFETIME_SECONDS = 30 * 60
 
 
 def _secret() -> bytes:
@@ -47,5 +48,42 @@ def verify_user_token(token: str) -> str | None:
         if int(expiration_raw) < int(time.time()):
             return None
         return base64.urlsafe_b64decode(encoded_username.encode("ascii")).decode("utf-8")
+    except (binascii.Error, UnicodeDecodeError, ValueError):
+        return None
+
+
+def _password_binding(password_hash: str) -> str:
+    """Short digest of the current password hash, folded into a reset token.
+
+    Because it changes the moment the password is reset, a used reset token
+    stops verifying - that makes reset tokens single-use and invalidates any
+    outstanding ones whenever the password changes, with no DB column."""
+    return hashlib.sha256(password_hash.encode("utf-8")).hexdigest()[:16]
+
+
+def create_reset_token(email: str, password_hash: str, *, expires_at: int | None = None) -> str:
+    """Mint a short-lived, single-use password-reset token bound to the current hash."""
+    encoded_email = base64.urlsafe_b64encode(email.encode("utf-8")).decode("ascii")
+    expiration = expires_at or int(time.time()) + _RESET_TOKEN_LIFETIME_SECONDS
+    payload = f"reset.{encoded_email}.{_password_binding(password_hash)}.{expiration}"
+    signature = hmac.new(_secret(), payload.encode("ascii"), hashlib.sha256).hexdigest()
+    return f"{payload}.{signature}"
+
+
+def verify_reset_token(token: str, password_hash: str) -> str | None:
+    """Return the email if the reset token is valid for the current hash, else None."""
+    try:
+        purpose, encoded_email, binding, expiration_raw, supplied_signature = token.split(".", 4)
+        if purpose != "reset":
+            return None
+        payload = f"{purpose}.{encoded_email}.{binding}.{expiration_raw}"
+        expected_signature = hmac.new(_secret(), payload.encode("ascii"), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(supplied_signature, expected_signature):
+            return None
+        if int(expiration_raw) < int(time.time()):
+            return None
+        if not hmac.compare_digest(binding, _password_binding(password_hash)):
+            return None  # password already changed -> token spent
+        return base64.urlsafe_b64decode(encoded_email.encode("ascii")).decode("utf-8")
     except (binascii.Error, UnicodeDecodeError, ValueError):
         return None

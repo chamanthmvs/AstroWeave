@@ -195,6 +195,9 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.5; }
 .note { font-size: 0.85rem; color: var(--muted); line-height: 1.5; }
 .error-text { color: var(--coral); font-size: 0.85rem; margin-top: 0.5rem; min-height: 1.1em; }
 .ok-text { color: var(--accent); font-size: 0.85rem; margin-top: 0.5rem; }
+.link-btn { background: none; border: none; color: var(--muted); font-size: 0.85rem; padding: 0.6rem 0; cursor: pointer; text-decoration: underline; }
+.link-btn:hover { color: var(--accent); }
+.change-password { margin-top: 0.8rem; padding-top: 0.8rem; border-top: 1px solid var(--line); }
 
 /* --- Auth screen ------------------------------------------------------- */
 .auth-wrap {

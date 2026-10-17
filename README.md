@@ -151,6 +151,19 @@ prompts, structured outputs (JSON schemas) for routing and specialist replies,
 and server-side refusal fallbacks. Other providers' JSON replies are retried
 once when malformed or truncated.
 
+### Accounts and password reset
+
+Accounts use SQLite with scrypt password hashing. A signed-in user can change
+their password at `POST /auth/change-password` (and from the sidebar in the UI).
+For a forgotten password, `POST /auth/request-reset` always returns the same
+response (so it can't reveal which emails exist) and mints a short-lived,
+single-use reset token. There is no email provider wired up, so the token is
+logged for the operator and an **admin** can mint one to hand over via
+`POST /admin/reset-token`; the user completes the reset at `POST /auth/reset`
+(or the “Forgot password?” flow in the UI). The token is bound to the current
+password hash, so it stops working the moment the password changes. Wire an
+email sender later to deliver the token automatically.
+
 ### Rate limiting
 
 Because every `/run` spends money on the LLM provider's key, the endpoint has a

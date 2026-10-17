@@ -21,7 +21,12 @@ from astroweave.common.conversation import (
     ConversationStore,
 )
 from astroweave.common.ratelimit import RateLimiter
-from astroweave.common.security import create_user_token, verify_user_token
+from astroweave.common.security import (
+    create_reset_token,
+    create_user_token,
+    verify_reset_token,
+    verify_user_token,
+)
 from astroweave.common.usage import UsageStore
 from astroweave.common.tools.chart_client import ChartServiceUnavailable
 from astroweave.graphs.orchestrator.orchestrator_graph import build_orchestrator_graph
@@ -79,6 +84,23 @@ class RegisterRequest(SignInRequest):
     birth_details: RegistrationBirthDetails
 
 
+class RequestResetRequest(BaseModel):
+    email: str
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+
+_MIN_PASSWORD_LENGTH = 8
+
+
 def _user_profile(username: str) -> dict | None:
     with auth.get_connection() as connection:
         return auth.get_user(connection, username)
@@ -108,6 +130,58 @@ def register(request: RegisterRequest) -> dict:
     return {"user": user, "token": create_user_token(user["email"])}
 
 
+def _issue_reset_token(email: str) -> str | None:
+    """Mint a reset token for an email if the account exists (else None)."""
+    with auth.get_connection() as connection:
+        password_hash = auth.get_password_hash(connection, email)
+    if password_hash is None:
+        return None
+    return create_reset_token(email, password_hash)
+
+
+@app.post("/auth/request-reset")
+def request_reset(request: RequestResetRequest) -> dict:
+    """Start a password reset. Always returns the same response so the endpoint
+    can't be used to discover which emails have accounts. With no email provider
+    wired up, the token is logged for the operator / available to an admin."""
+    email = request.email.strip().lower()
+    token = _issue_reset_token(email)
+    if token is not None:
+        logger.info("Password reset requested email=%s reset_token=%s", email, token)
+    else:
+        logger.info("Password reset requested for unknown email=%s (no token issued)", email)
+    return {"status": "ok", "message": "If that account exists, a password reset has been created."}
+
+
+@app.post("/auth/reset")
+def reset_password(request: ResetPasswordRequest) -> dict:
+    if len(request.new_password) < _MIN_PASSWORD_LENGTH:
+        raise HTTPException(status_code=422, detail="New password must be at least 8 characters.")
+    with auth.get_connection() as connection:
+        # The token encodes the email; verify it against each candidate's current hash.
+        # (Decode the email from the token to look up the one account it targets.)
+        email = _reset_email_from_token(connection, request.token)
+        if email is None:
+            raise HTTPException(status_code=400, detail="This reset link is invalid or has expired.")
+        auth.update_password(connection, email, request.new_password)
+    return {"status": "ok", "message": "Your password has been reset. You can now sign in."}
+
+
+def _reset_email_from_token(connection, token: str) -> str | None:
+    """Resolve a reset token to its account by verifying against that account's hash."""
+    import base64
+
+    try:
+        encoded_email = token.split(".", 2)[1]
+        email = base64.urlsafe_b64decode(encoded_email.encode("ascii")).decode("utf-8")
+    except (ValueError, UnicodeDecodeError):
+        return None
+    password_hash = auth.get_password_hash(connection, email)
+    if password_hash is None:
+        return None
+    return verify_reset_token(token, password_hash)
+
+
 def authenticated_username(
     authorization: str | None = Header(default=None),
 ) -> str:
@@ -128,6 +202,17 @@ def current_user(username: str = Depends(authenticated_username)) -> dict:
     if user is None:
         raise HTTPException(status_code=401, detail="Account not found.")
     return {"user": user}
+
+
+@app.post("/auth/change-password")
+def change_password(request: ChangePasswordRequest, username: str = Depends(authenticated_username)) -> dict:
+    if len(request.new_password) < _MIN_PASSWORD_LENGTH:
+        raise HTTPException(status_code=422, detail="New password must be at least 8 characters.")
+    with auth.get_connection() as connection:
+        if auth.authenticate_user(connection, username, request.current_password) is None:
+            raise HTTPException(status_code=403, detail="Current password is incorrect.")
+        auth.update_password(connection, username, request.new_password)
+    return {"status": "ok", "message": "Password changed."}
 
 
 @app.get("/usage")
@@ -153,6 +238,17 @@ def authenticated_admin(username: str = Depends(authenticated_username)) -> str:
 def admin_summary(_admin: str = Depends(authenticated_admin)) -> dict:
     """Usage and cost analytics across all users (admin only)."""
     return _usage_store.summary()
+
+
+@app.post("/admin/reset-token")
+def admin_reset_token(request: RequestResetRequest, _admin: str = Depends(authenticated_admin)) -> dict:
+    """Mint a reset token for a locked-out user that an admin can hand over
+    (the no-email delivery path). 404 if the account doesn't exist."""
+    email = request.email.strip().lower()
+    token = _issue_reset_token(email)
+    if token is None:
+        raise HTTPException(status_code=404, detail="No account with that email.")
+    return {"email": email, "reset_token": token, "expires_in_seconds": 30 * 60}
 
 
 def _request_fingerprint(request: RunRequest) -> str:
