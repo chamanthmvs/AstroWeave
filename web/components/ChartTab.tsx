@@ -41,6 +41,8 @@ export default function ChartTab() {
       .finally(() => setLoading(false));
   }, []);
 
+  const nakName = (profile?.summary?.nakshatra || "").split(" (")[0].trim();
+
   return (
     <section className="stack">
       <div className="hero">
@@ -66,9 +68,17 @@ export default function ChartTab() {
           <div className="section-title">Birth star</div>
           {(extras.nakMeaning || extras.nakTheme) && (
             <p className="dim" style={{ marginTop: 8 }}>
-              {extras.nakMeaning && <em>{extras.nakMeaning}</em>}
-              {extras.nakMeaning && extras.nakTheme ? " — " : ""}
-              {extras.nakTheme}
+              {nakName && (
+                <>
+                  Your birth star is <b>{nakName}</b>
+                  {extras.nakMeaning ? <>, which means “{extras.nakMeaning}.”</> : "."}{" "}
+                </>
+              )}
+              {extras.nakTheme && (
+                <>
+                  In classical texts it stands for <b>{extras.nakTheme}</b>.
+                </>
+              )}
             </p>
           )}
           <div className="nak-attrs" style={{ marginTop: 12 }}>
@@ -82,7 +92,11 @@ export default function ChartTab() {
           {profile?.rasi && (
             <div className="card">
               <div className="section-title">Moon sign</div>
-              {extras.rasiKeynote && <p className="dim" style={{ marginTop: 8 }}>{extras.rasiKeynote}</p>}
+              {extras.rasiKeynote && (
+                <p className="dim" style={{ marginTop: 8 }}>
+                  Your Moon sits in <b>{profile?.summary?.rasi}</b> — classically a {extras.rasiKeynote} sign.
+                </p>
+              )}
               <div className="nak-attrs" style={{ marginTop: 12 }}>
                 {attrRows(profile.rasi, ["element", "modality", "varna"])}
               </div>
