@@ -148,6 +148,12 @@ class AllowlistRequest(BaseModel):
     email: str
 
 
+class AccessRequestRequest(BaseModel):
+    email: str
+    name: str | None = None
+    note: str | None = None
+
+
 _MIN_PASSWORD_LENGTH = 8
 
 
@@ -178,6 +184,29 @@ def _signup_permitted(email: str) -> bool:
         return auth.is_signup_allowed(connection, email)
 
 
+def _allowed_email_domains() -> set[str]:
+    """Domains permitted to register/request access. Default: gmail.com only.
+    Set ASTROWEAVE_ALLOWED_EMAIL_DOMAINS (comma-separated) to change, or empty to allow any."""
+    raw = os.environ.get("ASTROWEAVE_ALLOWED_EMAIL_DOMAINS", "gmail.com")
+    return {domain.strip().lower() for domain in raw.split(",") if domain.strip()}
+
+
+def _require_gmail(email: str) -> None:
+    """Enforce the allowed-domain policy (Gmail-only by default)."""
+    domains = _allowed_email_domains()
+    if not domains:
+        return
+    domain = email.rsplit("@", 1)[-1].lower() if "@" in email else ""
+    if domain not in domains:
+        pretty = " or ".join(f"@{d}" for d in sorted(domains))
+        raise HTTPException(status_code=422, detail=f"For now, only {pretty} email addresses are supported.")
+
+
+def _with_admin(user: dict) -> dict:
+    """Tag a user payload with whether they are an admin (drives the admin tab)."""
+    return {**user, "is_admin": user.get("email", "").strip().lower() in _admin_emails()}
+
+
 def _send_verification_email(email: str) -> bool:
     """Mint a verification link and send it (or log it in console mode)."""
     token = create_verification_token(email)
@@ -203,7 +232,7 @@ def sign_in(request: SignInRequest) -> dict:
         user = auth.authenticate_user(connection, request.email.strip().lower(), request.password)
     if user is None:
         raise HTTPException(status_code=401, detail="Invalid email or password.")
-    return {"user": user, "token": create_user_token(user["email"])}
+    return {"user": _with_admin(user), "token": create_user_token(user["email"])}
 
 
 @app.post("/auth/register")
@@ -211,6 +240,7 @@ def register(request: RegisterRequest) -> dict:
     if len(request.password) < 8 or not request.name.strip():
         raise HTTPException(status_code=422, detail="Name and an 8-character password are required.")
     email = request.email.strip().lower()
+    _require_gmail(email)
     if not _signup_permitted(email):
         raise HTTPException(
             status_code=403,
@@ -226,9 +256,29 @@ def register(request: RegisterRequest) -> dict:
         raise HTTPException(status_code=422, detail=str(error)) from error
     sent = _send_verification_email(user["email"])
     return {
-        "user": user,
+        "user": _with_admin(user),
         "token": create_user_token(user["email"]),
         "email_verification": {"sent": sent, "required": _require_email_verification()},
+    }
+
+
+@app.post("/auth/request-access")
+def request_access(request: AccessRequestRequest) -> dict:
+    """A not-yet-invited person asks the admin for access (shown on the admin tab).
+
+    Always returns the same friendly response, so it can't be used to probe which
+    emails exist. Restricted to Gmail for now."""
+    email = request.email.strip().lower()
+    _require_gmail(email)
+    with auth.get_connection() as connection:
+        auth.create_access_request(
+            connection, email,
+            (request.name or "").strip() or None,
+            (request.note or "").strip() or None,
+        )
+    return {
+        "status": "ok",
+        "message": "Thanks! Your request has been sent to the AstroWeave team. You'll be able to sign up once it's approved.",
     }
 
 
@@ -322,7 +372,7 @@ def current_user(username: str = Depends(authenticated_username)) -> dict:
     user = _user_profile(username)
     if user is None:
         raise HTTPException(status_code=401, detail="Account not found.")
-    return {"user": user}
+    return {"user": _with_admin(user)}
 
 
 @app.post("/auth/request-verification")
@@ -464,6 +514,32 @@ def admin_remove_allowlist(email: str, _admin: str = Depends(authenticated_admin
     normalized = email.strip().lower()
     with auth.get_connection() as connection:
         removed = auth.remove_allowed_email(connection, normalized)
+    return {"status": "ok", "email": normalized, "removed": removed}
+
+
+@app.get("/admin/access-requests")
+def admin_access_requests(_admin: str = Depends(authenticated_admin)) -> dict:
+    """People who have asked for access but aren't invited yet."""
+    with auth.get_connection() as connection:
+        return {"requests": auth.list_access_requests(connection)}
+
+
+@app.post("/admin/access-requests/{email}/approve")
+def admin_approve_access(email: str, admin: str = Depends(authenticated_admin)) -> dict:
+    """Approve a request: add the email to the allowlist and clear the request."""
+    normalized = email.strip().lower()
+    with auth.get_connection() as connection:
+        auth.add_allowed_email(connection, normalized, invited_by=admin)
+        auth.delete_access_request(connection, normalized)
+    return {"status": "ok", "email": normalized}
+
+
+@app.delete("/admin/access-requests/{email}")
+def admin_decline_access(email: str, _admin: str = Depends(authenticated_admin)) -> dict:
+    """Decline (remove) a pending access request."""
+    normalized = email.strip().lower()
+    with auth.get_connection() as connection:
+        removed = auth.delete_access_request(connection, normalized)
     return {"status": "ok", "email": normalized, "removed": removed}
 
 

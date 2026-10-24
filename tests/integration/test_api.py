@@ -436,7 +436,7 @@ class ApiTests(unittest.TestCase):
                  patch("astroweave.graphs.orchestrator.orchestrator_graph.get_llm", return_value=orchestrator_llm), \
                  patch("astroweave.graphs.specialist.specialist_graph.get_llm", return_value=specialist_llm), \
                  patch("astroweave.orchestration.dispatcher.dispatcher.get_birth_chart", return_value={"d1": {}}) as chart, \
-                 patch.dict("os.environ", {"ASTROWEAVE_APP_ROUTES": '{"career-app":"career"}', "ASTROWEAVE_SIGNUP_MODE": "open"}):
+                 patch.dict("os.environ", {"ASTROWEAVE_APP_ROUTES": '{"career-app":"career"}', "ASTROWEAVE_SIGNUP_MODE": "open", "ASTROWEAVE_ALLOWED_EMAIL_DOMAINS": ""}):
                 registration = self.client.post("/auth/register", json={
                     "email": "demo-user", "name": "Demo", "password": "securepass123",
                     "birth_details": birth,
@@ -620,7 +620,7 @@ class PasswordResetTests(unittest.TestCase):
     def test_registration_user_starts_unverified_then_verifies(self):
         from astroweave.common.security import create_verification_token
 
-        with patch.dict("os.environ", {"ASTROWEAVE_SIGNUP_MODE": "open"}):
+        with patch.dict("os.environ", {"ASTROWEAVE_SIGNUP_MODE": "open", "ASTROWEAVE_ALLOWED_EMAIL_DOMAINS": ""}):
             registration = self.client.post("/auth/register", json={
                 "email": "new@example.com", "name": "New", "password": "securepass123",
                 "birth_details": {
@@ -666,20 +666,45 @@ class PasswordResetTests(unittest.TestCase):
         return {"Authorization": f"Bearer {create_user_token(email)}"}
 
     def test_invite_only_blocks_strangers_and_allows_after_admin_grant(self):
-        # Default mode is invite: an unlisted email is refused.
-        self.assertEqual(self._register("stranger@example.com").status_code, 403)
+        # Default mode is invite: an unlisted (but valid Gmail) email is refused.
+        self.assertEqual(self._register("stranger@gmail.com").status_code, 403)
 
         admin = "astroweaveastrology@gmail.com"
         with patch.dict("os.environ", {"ASTROWEAVE_ADMIN_EMAILS": admin}):
             granted = self.client.post(
-                "/admin/allowlist", json={"email": "stranger@example.com"}, headers=self._admin_headers(admin),
+                "/admin/allowlist", json={"email": "stranger@gmail.com"}, headers=self._admin_headers(admin),
             )
             self.assertEqual(granted.status_code, 200, granted.text)
             listed = self.client.get("/admin/allowlist", headers=self._admin_headers(admin)).json()
-            self.assertIn("stranger@example.com", [row["email"] for row in listed["allowed"]])
+            self.assertIn("stranger@gmail.com", [row["email"] for row in listed["allowed"]])
 
         # Now the same email may register.
-        self.assertEqual(self._register("stranger@example.com").status_code, 200)
+        self.assertEqual(self._register("stranger@gmail.com").status_code, 200)
+
+    def test_non_gmail_is_rejected_on_register_and_request_access(self):
+        self.assertEqual(self._register("someone@outlook.com").status_code, 422)
+        self.assertEqual(
+            self.client.post("/auth/request-access", json={"email": "someone@outlook.com"}).status_code, 422
+        )
+
+    def test_request_access_is_recorded_and_admin_can_approve(self):
+        asked = self.client.post(
+            "/auth/request-access", json={"email": "hopeful@gmail.com", "name": "Hopeful", "note": "please!"},
+        )
+        self.assertEqual(asked.status_code, 200, asked.text)
+
+        admin = "astroweaveastrology@gmail.com"
+        with patch.dict("os.environ", {"ASTROWEAVE_ADMIN_EMAILS": admin}):
+            listed = self.client.get("/admin/access-requests", headers=self._admin_headers(admin)).json()
+            self.assertIn("hopeful@gmail.com", [r["email"] for r in listed["requests"]])
+            approved = self.client.post(
+                "/admin/access-requests/hopeful@gmail.com/approve", headers=self._admin_headers(admin),
+            )
+            self.assertEqual(approved.status_code, 200)
+            # Request cleared, email now allowlisted.
+            after = self.client.get("/admin/access-requests", headers=self._admin_headers(admin)).json()
+            self.assertNotIn("hopeful@gmail.com", [r["email"] for r in after["requests"]])
+        self.assertEqual(self._register("hopeful@gmail.com").status_code, 200)
 
     def test_admin_email_can_always_register(self):
         admin = "astroweaveastrology@gmail.com"

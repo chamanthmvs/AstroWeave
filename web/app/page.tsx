@@ -7,15 +7,18 @@ import AskTab from "@/components/AskTab";
 import MatchTab from "@/components/MatchTab";
 import ChartTab from "@/components/ChartTab";
 import AtlasTab from "@/components/AtlasTab";
+import AdminTab from "@/components/AdminTab";
 import ThemeToggle from "@/components/ThemeToggle";
+import QuotaBadge from "@/components/QuotaBadge";
 
-type TabKey = "ask" | "match" | "chart" | "atlas";
+type TabKey = "ask" | "match" | "chart" | "atlas" | "admin";
 
-const TABS: { key: TabKey; label: string; icon: string }[] = [
+const TABS: { key: TabKey; label: string; icon: string; adminOnly?: boolean }[] = [
   { key: "ask", label: "Ask", icon: "✦" },
   { key: "match", label: "Kundli Matching", icon: "☍" },
   { key: "chart", label: "My Chart", icon: "◐" },
   { key: "atlas", label: "Star Atlas", icon: "✧" },
+  { key: "admin", label: "Admin", icon: "⚙", adminOnly: true },
 ];
 
 export default function Home() {
@@ -35,9 +38,12 @@ export default function Home() {
   return (
     <>
       <header className="topbar">
-        <div className="brand">
-          <span className="brand-mark" aria-hidden />
-          AstroWeave
+        <div className="topbar-left">
+          <div className="brand">
+            <span className="brand-mark" aria-hidden />
+            AstroWeave
+          </div>
+          <QuotaBadge />
         </div>
         <div className="topbar-actions">
           <ThemeToggle />
@@ -49,7 +55,7 @@ export default function Home() {
 
       <main className="shell">
         <nav className="tabs" role="tablist" aria-label="Sections">
-          {TABS.map((t) => (
+          {TABS.filter((t) => !t.adminOnly || user.is_admin).map((t) => (
             <button
               key={t.key}
               className="tab"
@@ -67,6 +73,7 @@ export default function Home() {
         {tab === "match" && <MatchTab />}
         {tab === "chart" && <ChartTab />}
         {tab === "atlas" && <AtlasTab />}
+        {tab === "admin" && user.is_admin && <AdminTab />}
       </main>
     </>
   );

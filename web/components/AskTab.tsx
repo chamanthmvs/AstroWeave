@@ -29,6 +29,9 @@ export default function AskTab() {
       if (u.user.remaining !== null && u.user.remaining <= 0) setQuotaFull(true);
     } catch {
       /* non-fatal */
+    } finally {
+      // Nudge the top-bar badge to refresh too.
+      if (typeof window !== "undefined") window.dispatchEvent(new Event("astroweave:quota-refresh"));
     }
   }
 
@@ -159,7 +162,8 @@ export default function AskTab() {
       )}
 
       <p className="footnote">
-        AstroWeave is a paid service for us to run, so daily questions are limited.
+        Every reading runs on an LLM that we pay for ourselves, so daily questions are limited — thanks for
+        your cooperation.
       </p>
     </section>
   );

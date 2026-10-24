@@ -12,6 +12,7 @@ export type User = {
   email: string;
   name: string;
   email_verified: boolean;
+  is_admin?: boolean;
   birth_details: BirthDetails;
 };
 

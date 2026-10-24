@@ -73,6 +73,16 @@ signup_allowlist = Table(
     Column("created_at", String, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
 )
 
+# People asking an admin to grant them access (shown on the admin dashboard).
+access_requests = Table(
+    "access_requests",
+    _metadata,
+    Column("email", String, primary_key=True),
+    Column("name", String),
+    Column("note", String),
+    Column("created_at", String, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
+)
+
 
 def _resolve_engine(db_path: Path | None = None, engine: Engine | None = None) -> Engine:
     """Pick the engine for auth: explicit arg, else DATABASE_URL, else DB_PATH.
@@ -298,6 +308,34 @@ def remove_allowed_email(connection: Connection, email: str) -> bool:
     result = connection.execute(
         text("DELETE FROM signup_allowlist WHERE email = :email"), {"email": email}
     )
+    connection.commit()
+    return result.rowcount > 0
+
+
+def create_access_request(connection: Connection, email: str, name: str | None = None, note: str | None = None) -> None:
+    """Record (or refresh) a request to be granted access. Idempotent per email."""
+    connection.execute(
+        text(
+            """
+            INSERT INTO access_requests (email, name, note) VALUES (:email, :name, :note)
+            ON CONFLICT (email) DO UPDATE SET name = :name, note = :note
+            """
+        ),
+        {"email": email, "name": name, "note": note},
+    )
+    connection.commit()
+    logger.info("Access requested email=%s", email)
+
+
+def list_access_requests(connection: Connection) -> list[dict[str, Any]]:
+    rows = connection.execute(
+        text("SELECT email, name, note, created_at FROM access_requests ORDER BY created_at DESC")
+    ).mappings().all()
+    return [dict(row) for row in rows]
+
+
+def delete_access_request(connection: Connection, email: str) -> bool:
+    result = connection.execute(text("DELETE FROM access_requests WHERE email = :email"), {"email": email})
     connection.commit()
     return result.rowcount > 0
 
