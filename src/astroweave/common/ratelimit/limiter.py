@@ -20,15 +20,28 @@ Configuration (both default off-ish; a cap of 0 or blank disables that scope):
 from __future__ import annotations
 
 import os
-import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+from sqlalchemy import Column, Integer, MetaData, String, Table, text
+from sqlalchemy.engine import Connection, Engine
+
 from astroweave.common.config import get_logger
-from astroweave.common.conversation.store import get_conversation_db_path
+from astroweave.common.database import resolve_engine
 
 logger = get_logger(__name__)
+
+_metadata = MetaData()
+
+# One row per (UTC day, owner); the global tally lives under owner "*".
+usage_daily = Table(
+    "usage_daily",
+    _metadata,
+    Column("day", String, primary_key=True),
+    Column("owner", String, primary_key=True),
+    Column("request_count", Integer, nullable=False, server_default=text("0")),
+)
 
 _GLOBAL_OWNER = "*"  # usernames are emails, so this can never collide with a real owner
 _DEFAULT_PER_USER_PER_DAY = 50
@@ -78,46 +91,45 @@ class RateLimitResult:
 
 
 class RateLimiter:
-    """SQLite-backed daily run counter, safe across threads and processes."""
+    """Daily run counter, safe across threads and processes.
 
-    def __init__(self, db_path: Path | None = None) -> None:
-        self.db_path = db_path or get_conversation_db_path()
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
+    Backed by the shared engine (SQLite locally, Postgres in production). The
+    read-check-increment runs inside one transaction: both tallies are
+    incremented, and if either cap is now exceeded the whole transaction is
+    rolled back, so two concurrent requests cannot both slip past a cap and a
+    refused request leaves the counts untouched.
+    """
+
+    def __init__(self, db_path: Path | None = None, engine: Engine | None = None) -> None:
+        self.db_path = db_path
+        self._engine = resolve_engine(db_path, engine)
         self._initialize()
 
-    def _connect(self) -> sqlite3.Connection:
-        connection = sqlite3.connect(self.db_path, timeout=10)
-        connection.row_factory = sqlite3.Row
-        connection.execute("PRAGMA busy_timeout = 10000")
-        return connection
-
     def _initialize(self) -> None:
-        with self._connect() as connection:
-            connection.execute("PRAGMA journal_mode = WAL")
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS usage_daily (
-                    day TEXT NOT NULL,
-                    owner TEXT NOT NULL,
-                    request_count INTEGER NOT NULL DEFAULT 0,
-                    PRIMARY KEY (day, owner)
-                )
-                """
-            )
+        usage_daily.create(bind=self._engine, checkfirst=True)
 
-    def _count(self, connection: sqlite3.Connection, day: str, owner: str) -> int:
-        row = connection.execute(
-            "SELECT request_count FROM usage_daily WHERE day = ? AND owner = ?",
-            (day, owner),
-        ).fetchone()
-        return int(row["request_count"]) if row else 0
+    def _count(self, connection: Connection, day: str, owner: str) -> int:
+        value = connection.execute(
+            text("SELECT request_count FROM usage_daily WHERE day = :day AND owner = :owner"),
+            {"day": day, "owner": owner},
+        ).scalar()
+        return int(value) if value is not None else 0
+
+    def _increment(self, connection: Connection, day: str, owner: str) -> int:
+        """Atomically bump one tally and return its new value."""
+        connection.execute(
+            text(
+                """
+                INSERT INTO usage_daily (day, owner, request_count) VALUES (:day, :owner, 1)
+                ON CONFLICT (day, owner) DO UPDATE SET request_count = usage_daily.request_count + 1
+                """
+            ),
+            {"day": day, "owner": owner},
+        )
+        return self._count(connection, day, owner)
 
     def check_and_consume(self, owner: str) -> RateLimitResult:
-        """Reserve one run for ``owner`` today, or refuse if a cap is reached.
-
-        The read-then-increment runs inside a single ``BEGIN IMMEDIATE``
-        transaction so two concurrent requests cannot both pass a cap.
-        """
+        """Reserve one run for ``owner`` today, or refuse if a cap is reached."""
         per_user = per_user_limit()
         overall = global_limit()
         if per_user <= 0 and overall <= 0:
@@ -125,32 +137,23 @@ class RateLimiter:
 
         now = _utc_now()
         day = now.date().isoformat()
-        connection = self._connect()
+        connection = self._engine.connect()
+        transaction = connection.begin()
         try:
-            connection.execute("BEGIN IMMEDIATE")
-            user_used = self._count(connection, day, owner)
-            overall_used = self._count(connection, day, _GLOBAL_OWNER)
-            if per_user > 0 and user_used >= per_user:
-                connection.rollback()
-                logger.warning("Rate limit hit (user) owner=%s used=%d limit=%d", owner, user_used, per_user)
-                return RateLimitResult(False, "user", per_user, user_used, _seconds_until_utc_midnight(now))
-            if overall > 0 and overall_used >= overall:
-                connection.rollback()
-                logger.warning("Rate limit hit (global) used=%d limit=%d", overall_used, overall)
-                return RateLimitResult(False, "global", overall, overall_used, _seconds_until_utc_midnight(now))
-
             # Count every run against both the per-user and the global tally, so
             # the global figure stays meaningful even while its cap is disabled.
-            for key in (owner, _GLOBAL_OWNER):
-                connection.execute(
-                    """
-                    INSERT INTO usage_daily (day, owner, request_count) VALUES (?, ?, 1)
-                    ON CONFLICT(day, owner) DO UPDATE SET request_count = request_count + 1
-                    """,
-                    (day, key),
-                )
-            connection.commit()
-            return RateLimitResult(allowed=True, scope="user", limit=per_user or None, used=user_used + 1)
+            user_used = self._increment(connection, day, owner)
+            overall_used = self._increment(connection, day, _GLOBAL_OWNER)
+            if per_user > 0 and user_used > per_user:
+                transaction.rollback()
+                logger.warning("Rate limit hit (user) owner=%s used=%d limit=%d", owner, user_used - 1, per_user)
+                return RateLimitResult(False, "user", per_user, user_used - 1, _seconds_until_utc_midnight(now))
+            if overall > 0 and overall_used > overall:
+                transaction.rollback()
+                logger.warning("Rate limit hit (global) used=%d limit=%d", overall_used - 1, overall)
+                return RateLimitResult(False, "global", overall, overall_used - 1, _seconds_until_utc_midnight(now))
+            transaction.commit()
+            return RateLimitResult(allowed=True, scope="user", limit=per_user or None, used=user_used)
         finally:
             connection.close()
 
@@ -158,7 +161,7 @@ class RateLimiter:
         """Report ``owner``'s and the global run counts for today (no consumption)."""
         now = _utc_now()
         day = now.date().isoformat()
-        with self._connect() as connection:
+        with self._engine.connect() as connection:
             user_used = self._count(connection, day, owner)
             overall_used = self._count(connection, day, _GLOBAL_OWNER)
         per_user = per_user_limit()

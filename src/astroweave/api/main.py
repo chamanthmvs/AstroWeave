@@ -5,6 +5,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from langgraph.runtime import Runtime
@@ -21,11 +22,14 @@ from astroweave.common.conversation import (
     ConversationStore,
 )
 from astroweave.common.ratelimit import RateLimiter
+from astroweave.common.email import public_web_url, send_email
 from astroweave.common.security import (
     create_reset_token,
     create_user_token,
+    create_verification_token,
     verify_reset_token,
     verify_user_token,
+    verify_verification_token,
 )
 from astroweave.common.usage import UsageStore
 from astroweave.common.astro import build_chart_view, build_profile
@@ -43,6 +47,39 @@ app = FastAPI(
     title="AstroWeave API",
     description="HTTP boundary for the AstroWeave astrology system.",
     version="0.2.0",
+)
+
+
+def _cors_origins() -> list[str]:
+    """Allowed browser origins for a separately-hosted frontend (e.g. Vercel).
+
+    The SPA served from this same origin needs no CORS; this is for the Next.js
+    app deployed on another domain. Set ``ASTROWEAVE_CORS_ORIGINS`` to a
+    comma-separated list in production. Defaults cover local Next.js/Vite dev.
+    """
+    raw = os.environ.get("ASTROWEAVE_CORS_ORIGINS", "")
+    configured = [origin.strip() for origin in raw.split(",") if origin.strip()]
+    if configured:
+        return configured
+    return [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+    ]
+
+
+# A regex is the practical way to allow Vercel's per-deploy preview URLs
+# (e.g. https://astroweave-git-branch-user.vercel.app) without listing each one.
+_cors_origin_regex = os.environ.get("ASTROWEAVE_CORS_ORIGIN_REGEX") or None
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins(),
+    allow_origin_regex=_cors_origin_regex,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 _orchestrator_graph = build_orchestrator_graph()
@@ -103,7 +140,36 @@ class ChangePasswordRequest(BaseModel):
     new_password: str
 
 
+class VerifyEmailRequest(BaseModel):
+    token: str
+
+
 _MIN_PASSWORD_LENGTH = 8
+
+
+def _require_email_verification() -> bool:
+    """Whether a verified email is required to use /run. Off by default, so
+    signup works end-to-end before any email sender is configured."""
+    return (os.environ.get("ASTROWEAVE_REQUIRE_EMAIL_VERIFICATION", "") or "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _send_verification_email(email: str) -> bool:
+    """Mint a verification link and send it (or log it in console mode)."""
+    token = create_verification_token(email)
+    link = f"{public_web_url()}/verify?token={token}"
+    body = (
+        "Welcome to AstroWeave.\n\n"
+        "Please confirm your email address by opening this link:\n"
+        f"{link}\n\n"
+        "This link expires in 24 hours. If you did not create this account, ignore this email."
+    )
+    logger.info("Email verification requested email=%s verify_token=%s", email, token)
+    return send_email(email, "Confirm your AstroWeave email", body)
 
 
 def _user_profile(username: str) -> dict | None:
@@ -132,7 +198,24 @@ def register(request: RegisterRequest) -> dict:
             )
     except (ValueError, KeyError) as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
-    return {"user": user, "token": create_user_token(user["email"])}
+    sent = _send_verification_email(user["email"])
+    return {
+        "user": user,
+        "token": create_user_token(user["email"]),
+        "email_verification": {"sent": sent, "required": _require_email_verification()},
+    }
+
+
+@app.post("/auth/verify")
+def verify_email(request: VerifyEmailRequest) -> dict:
+    """Confirm an email address from the link sent at registration."""
+    email = verify_verification_token(request.token)
+    if email is None:
+        raise HTTPException(status_code=400, detail="This verification link is invalid or has expired.")
+    with auth.get_connection() as connection:
+        if not auth.mark_email_verified(connection, email):
+            raise HTTPException(status_code=400, detail="This verification link is invalid or has expired.")
+    return {"status": "ok", "message": "Your email is verified. Welcome to AstroWeave."}
 
 
 def _issue_reset_token(email: str) -> str | None:
@@ -153,6 +236,13 @@ def request_reset(request: RequestResetRequest) -> dict:
     token = _issue_reset_token(email)
     if token is not None:
         logger.info("Password reset requested email=%s reset_token=%s", email, token)
+        link = f"{public_web_url()}/reset?token={token}"
+        body = (
+            "A password reset was requested for your AstroWeave account.\n\n"
+            f"Reset your password here:\n{link}\n\n"
+            "This link expires in 30 minutes. If you did not request this, you can ignore this email."
+        )
+        send_email(email, "Reset your AstroWeave password", body)
     else:
         logger.info("Password reset requested for unknown email=%s (no token issued)", email)
     return {"status": "ok", "message": "If that account exists, a password reset has been created."}
@@ -207,6 +297,22 @@ def current_user(username: str = Depends(authenticated_username)) -> dict:
     if user is None:
         raise HTTPException(status_code=401, detail="Account not found.")
     return {"user": user}
+
+
+@app.post("/auth/request-verification")
+def request_verification(username: str = Depends(authenticated_username)) -> dict:
+    """Resend the verification email for the signed-in (but unverified) user."""
+    user = _user_profile(username)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Account not found.")
+    if user.get("email_verified"):
+        return {"status": "ok", "message": "Your email is already verified.", "sent": False}
+    sent = _send_verification_email(user["email"])
+    return {
+        "status": "ok",
+        "message": "A verification email has been sent." if sent else "A verification link has been generated.",
+        "sent": sent,
+    }
 
 
 def _birth_for(username: str) -> dict:
@@ -401,6 +507,11 @@ def run(
     profile = _user_profile(authenticated_user)
     if profile is None:
         raise HTTPException(status_code=401, detail="Account not found.")
+    if _require_email_verification() and not profile.get("email_verified"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "email_unverified", "message": "Please verify your email address before using AstroWeave."},
+        )
     specialist = _direct_specialist(request.app_id)
     try:
         previous_ids = _conversation_store.request_ids(request.message_id, authenticated_user)

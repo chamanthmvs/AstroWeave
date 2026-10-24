@@ -2,6 +2,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from sqlalchemy import text
+
 from app import auth
 
 
@@ -32,11 +34,12 @@ class AuthTests(unittest.TestCase):
 
         self.assertEqual(created["email"], "maya@example.com")
         self.assertEqual(created["birth_details"], _BIRTH_DETAILS)
-        row = self.connection.execute(
-            "SELECT password_hash FROM users WHERE email = ?", ("maya@example.com",)
-        ).fetchone()
-        self.assertTrue(row["password_hash"].startswith("scrypt$"))
-        self.assertNotIn(password, row["password_hash"])
+        stored_hash = self.connection.execute(
+            text("SELECT password_hash FROM users WHERE email = :email"),
+            {"email": "maya@example.com"},
+        ).scalar()
+        self.assertTrue(stored_hash.startswith("scrypt$"))
+        self.assertNotIn(password, stored_hash)
 
     def test_update_password_changes_the_hash_and_login(self) -> None:
         auth.create_user(self.connection, "maya@example.com", "Maya Patel", "old-password-123", _BIRTH_DETAILS)

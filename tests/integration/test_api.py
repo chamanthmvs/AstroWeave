@@ -617,6 +617,39 @@ class PasswordResetTests(unittest.TestCase):
             r = self.client.post("/admin/reset-token", json={"email": "u@example.com"}, headers=self._token())
         self.assertEqual(r.status_code, 403)
 
+    def test_registration_user_starts_unverified_then_verifies(self):
+        from astroweave.common.security import create_verification_token
+
+        registration = self.client.post("/auth/register", json={
+            "email": "new@example.com", "name": "New", "password": "securepass123",
+            "birth_details": {
+                "date": "1992-02-02", "time": "09:30:00", "place_name": "Mumbai",
+                "latitude": 19.07, "longitude": 72.88, "utc_offset_hours": 5.5, "date_known": True,
+            },
+        })
+        self.assertEqual(registration.status_code, 200, registration.text)
+        self.assertFalse(registration.json()["user"]["email_verified"])
+        self.assertIn("email_verification", registration.json())
+
+        # The link carries a verification token; confirm it flips the flag.
+        token = create_verification_token("new@example.com")
+        verified = self.client.post("/auth/verify", json={"token": token})
+        self.assertEqual(verified.status_code, 200, verified.text)
+        me = self.client.get("/auth/me", headers=self._token("new@example.com"))
+        self.assertTrue(me.json()["user"]["email_verified"])
+
+    def test_verify_rejects_an_invalid_token(self):
+        self.assertEqual(self.client.post("/auth/verify", json={"token": "garbage"}).status_code, 400)
+
+    def test_run_blocks_unverified_users_only_when_verification_is_required(self):
+        # u@example.com was created unverified in setUp.
+        with patch.dict("os.environ", {"ASTROWEAVE_REQUIRE_EMAIL_VERIFICATION": "true"}):
+            blocked = self.client.post(
+                "/run", json={"query": "hello", "message_id": "m-gate"}, headers=self._token(),
+            )
+        self.assertEqual(blocked.status_code, 403, blocked.text)
+        self.assertEqual(blocked.json()["detail"]["code"], "email_unverified")
+
 
 if __name__ == "__main__":
     unittest.main()

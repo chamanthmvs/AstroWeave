@@ -1,6 +1,9 @@
 import tempfile
 import unittest
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+
+from sqlalchemy import text
 
 from astroweave.common.conversation import (
     ConversationAccessError,
@@ -252,13 +255,12 @@ class ConversationStoreTests(unittest.TestCase):
             "request_fingerprint": "fingerprint-1",
         }
         old_claim_token, _ = self.store.claim_request(**claim)
-        with self.store._connect() as connection:
+        # Age the claim past its TTL so the next attempt reclaims it.
+        stale = (datetime.now(timezone.utc) - timedelta(hours=2)).strftime("%Y-%m-%d %H:%M:%S")
+        with self.store._engine.begin() as connection:
             connection.execute(
-                """
-                UPDATE conversation_requests
-                SET created_at = datetime('now', '-2 hours')
-                WHERE message_id = 'message-1'
-                """
+                text("UPDATE conversation_requests SET created_at = :stale WHERE message_id = 'message-1'"),
+                {"stale": stale},
             )
 
         new_claim_token, answer = self.store.claim_request(**claim)

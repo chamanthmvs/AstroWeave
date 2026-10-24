@@ -1,0 +1,96 @@
+# Render Blueprint — deploys AstroWeave on Render's FREE plans.
+#
+# What this provisions, with no manual database creation:
+#   - astroweave-db     : a free Postgres instance (DATABASE_URL is injected into
+#                          the API automatically — see envVars below)
+#   - astroweave-api    : the backend + its static SPA (FastAPI)
+#   - astroweave-chart  : the isolated PyJHora chart service (own process/deps)
+#
+# To deploy: push this repo to GitHub, then on Render choose
+# "New +" -> "Blueprint" and point it at the repo. Render reads this file.
+#
+# Values marked `sync: false` are the only things you set by hand, in the Render
+# dashboard after the first deploy (secrets and cross-service URLs that cannot be
+# known until the services exist). Everything else is automatic.
+#
+# NOTE: Render's free Postgres has a limited lifetime. For long-term durability,
+# create a free Neon database and paste its connection string over DATABASE_URL
+# (change that one env var from `fromDatabase` to a literal value); nothing else
+# changes. The admin dashboard reads from whichever database DATABASE_URL names.
+
+databases:
+  - name: astroweave-db
+    plan: free
+    databaseName: astroweave
+    user: astroweave
+
+services:
+  # ---- Backend API + SPA ---------------------------------------------------
+  - type: web
+    name: astroweave-api
+    runtime: python
+    plan: free
+    rootDir: .
+    buildCommand: pip install -e .
+    startCommand: uvicorn astroweave.api.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"
+      - key: ASTROWEAVE_ENV
+        value: production
+      # DATABASE_URL is wired automatically from the Postgres instance above.
+      - key: DATABASE_URL
+        fromDatabase:
+          name: astroweave-db
+          property: connectionString
+      # A strong signing secret is generated once and kept across deploys.
+      - key: ASTROWEAVE_AUTH_SECRET
+        generateValue: true
+      - key: ASTROWEAVE_LLM_PROVIDER
+        value: anthropic
+      # Secrets / cross-service values: set these in the dashboard after deploy.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: ASTROWEAVE_CHART_SERVICE_URL
+        sync: false   # https://astroweave-chart.onrender.com (the chart service's URL)
+      - key: ASTROWEAVE_ADMIN_EMAILS
+        sync: false   # your email, to reach /admin
+      - key: ASTROWEAVE_CORS_ORIGINS
+        sync: false   # e.g. https://astroweave.vercel.app
+      - key: ASTROWEAVE_CORS_ORIGIN_REGEX
+        sync: false   # e.g. ^https://astroweave-.*\.vercel\.app$  (Vercel previews)
+      - key: ASTROWEAVE_PUBLIC_WEB_URL
+        sync: false   # the Vercel URL; used to build links in verification/reset emails
+      # Email: defaults to "console" (links are logged, nothing is sent, $0).
+      # To send real email, set backend to "smtp" and fill the SMTP vars with a
+      # free Gmail account + app password. No code change needed.
+      - key: ASTROWEAVE_EMAIL_BACKEND
+        value: console
+      - key: ASTROWEAVE_SMTP_HOST
+        sync: false   # e.g. smtp.gmail.com
+      - key: ASTROWEAVE_SMTP_PORT
+        value: "587"
+      - key: ASTROWEAVE_SMTP_USER
+        sync: false
+      - key: ASTROWEAVE_SMTP_PASSWORD
+        sync: false   # a Gmail app password (free)
+      - key: ASTROWEAVE_EMAIL_FROM
+        sync: false
+      # Require a verified email before /run? Off by default so signup works
+      # end-to-end even in console email mode. Flip to "true" once SMTP is set.
+      - key: ASTROWEAVE_REQUIRE_EMAIL_VERIFICATION
+        value: "false"
+
+  # ---- Isolated PyJHora chart service --------------------------------------
+  - type: web
+    name: astroweave-chart
+    runtime: python
+    plan: free
+    rootDir: chart_service
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.9"

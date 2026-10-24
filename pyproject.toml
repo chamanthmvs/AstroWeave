@@ -19,6 +19,8 @@ dependencies = [
     "python-dotenv",
     "geopy",
     "certifi",
+    "sqlalchemy>=2,<3",        # DB layer: SQLite locally, Postgres in production (via DATABASE_URL)
+    "psycopg[binary]>=3",      # Postgres driver, used only when DATABASE_URL points at Postgres
 ]
 
 [project.optional-dependencies]
