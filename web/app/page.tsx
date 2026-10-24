@@ -7,6 +7,7 @@ import AskTab from "@/components/AskTab";
 import MatchTab from "@/components/MatchTab";
 import ChartTab from "@/components/ChartTab";
 import AtlasTab from "@/components/AtlasTab";
+import ThemeToggle from "@/components/ThemeToggle";
 
 type TabKey = "ask" | "match" | "chart" | "atlas";
 
@@ -38,9 +39,12 @@ export default function Home() {
           <span className="brand-mark" aria-hidden />
           AstroWeave
         </div>
-        <button className="btn btn-ghost" onClick={signOut}>
-          Sign out
-        </button>
+        <div className="topbar-actions">
+          <ThemeToggle />
+          <button className="btn btn-ghost" onClick={signOut}>
+            Sign out
+          </button>
+        </div>
       </header>
 
       <main className="shell">

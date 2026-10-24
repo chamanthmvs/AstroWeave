@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useAuth } from "@/lib/auth";
 import BirthFields, { emptyBirth, isGeocoded, type BirthForm } from "./BirthFields";
+import ThemeToggle from "./ThemeToggle";
 
 export default function AuthView() {
   const { signIn, register } = useAuth();
@@ -48,6 +49,9 @@ export default function AuthView() {
   return (
     <main className="auth-wrap">
       <div className="auth-card stack">
+        <div className="auth-top">
+          <ThemeToggle />
+        </div>
         <div className="center">
           <div className="brand" style={{ justifyContent: "center" }}>
             <span className="brand-mark" aria-hidden />

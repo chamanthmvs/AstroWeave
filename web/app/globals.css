@@ -1,104 +1,230 @@
 /* ============================================================
-   AstroWeave — Celestial Minimal
-   Near-black sky, soft starfield, one vivid aqua accent.
+   AstroWeave — a night sky you can read by.
+   Deep violet/blue cosmos, a dense field of stars, one luminous
+   accent. Dark by default; a soft "dawn" light theme is available.
    ============================================================ */
 
 :root {
-  --bg: #07080d;
-  --bg-deep: #05060a;
-  --surface: #0e1017;
-  --surface-2: #141826;
-  --surface-3: #1b2133;
-  --border: rgba(255, 255, 255, 0.08);
-  --border-strong: rgba(255, 255, 255, 0.16);
+  /* Space palette (dark, default) */
+  --space-0: #050314;
+  --space-1: #0a0722;
+  --violet-glow: rgba(139, 92, 246, 0.22);
+  --blue-glow: rgba(56, 100, 230, 0.20);
 
-  --text: #e8eaf2;
-  --text-dim: #aeb4c8;
-  --muted: #777f98;
+  --surface: rgba(21, 18, 48, 0.55);
+  --surface-2: rgba(30, 26, 64, 0.62);
+  --surface-3: rgba(40, 35, 82, 0.7);
+  --border: rgba(170, 160, 255, 0.14);
+  --border-strong: rgba(180, 170, 255, 0.28);
+  --glass-blur: 14px;
 
-  --accent: #43e6c8;
-  --accent-2: #7cf5df;
-  --accent-soft: rgba(67, 230, 200, 0.14);
-  --accent-ink: #042019;
+  --text: #eceafc;
+  --text-dim: #bcb9df;
+  --muted: #8d8ab6;
 
-  --danger: #ff6b7d;
-  --ok: #6ee7a8;
+  --accent: #a78bfa;          /* luminous violet */
+  --accent-2: #c9b7ff;
+  --accent-soft: rgba(167, 139, 250, 0.18);
+  --accent-ink: #160a2e;
+  --star-cyan: #8fe8ff;       /* secondary cosmic highlight */
 
-  --radius: 16px;
-  --radius-sm: 10px;
-  --shadow: 0 20px 50px -20px rgba(0, 0, 0, 0.7);
-  --maxw: 1080px;
+  --danger: #ff7b8e;
+  --ok: #6fe3b0;
 
-  --font: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --star-opacity: 0.62;
+  --nebula-opacity: 1;
+
+  --radius: 18px;
+  --radius-sm: 11px;
+  --shadow: 0 24px 60px -24px rgba(0, 0, 0, 0.75);
+  --maxw: 1100px;
+
+  --font: "Sora", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-display: "Fraunces", "Playfair Display", Georgia, serif;
+
+  color-scheme: dark;
+}
+
+/* Soft dawn — a legible light theme (the cosmos recedes, doesn't vanish). */
+:root[data-theme="light"] {
+  --space-0: #eef0fb;
+  --space-1: #e4e7f8;
+  --violet-glow: rgba(139, 92, 246, 0.14);
+  --blue-glow: rgba(56, 100, 230, 0.12);
+
+  --surface: rgba(255, 255, 255, 0.82);
+  --surface-2: rgba(255, 255, 255, 0.9);
+  --surface-3: rgba(244, 243, 255, 0.95);
+  --border: rgba(60, 50, 120, 0.14);
+  --border-strong: rgba(60, 50, 120, 0.26);
+
+  --text: #1c1838;
+  --text-dim: #43406a;
+  --muted: #6c688f;
+
+  --accent: #6d28d9;
+  --accent-2: #7c3aed;
+  --accent-soft: rgba(109, 40, 217, 0.12);
+  --accent-ink: #ffffff;
+  --star-cyan: #0e7490;
+
+  --shadow: 0 20px 50px -26px rgba(60, 50, 120, 0.4);
+
+  --star-opacity: 0.28;
+  --nebula-opacity: 0.6;
+
+  color-scheme: light;
 }
 
 * { box-sizing: border-box; }
-
 html, body { padding: 0; margin: 0; }
 
 body {
-  background: var(--bg);
+  background: var(--space-0);
   color: var(--text);
   font-family: var(--font);
   -webkit-font-smoothing: antialiased;
-  line-height: 1.55;
+  line-height: 1.58;
   min-height: 100vh;
 }
 
-/* Soft starfield + aurora glow behind everything. */
-.starfield {
-  position: fixed;
-  inset: 0;
-  z-index: -1;
+/* ---- the sky ---- */
+.starfield { position: fixed; inset: 0; z-index: -1; overflow: hidden; background: var(--space-0); }
+
+.nebula {
+  position: absolute; inset: -20%;
+  opacity: var(--nebula-opacity);
   background:
-    radial-gradient(1200px 600px at 78% -10%, rgba(67, 230, 200, 0.10), transparent 60%),
-    radial-gradient(900px 500px at 10% 110%, rgba(90, 120, 255, 0.08), transparent 55%),
-    radial-gradient(1px 1px at 20% 30%, rgba(255,255,255,0.7), transparent),
-    radial-gradient(1px 1px at 60% 70%, rgba(255,255,255,0.5), transparent),
-    radial-gradient(1px 1px at 80% 20%, rgba(255,255,255,0.6), transparent),
-    radial-gradient(1px 1px at 35% 85%, rgba(255,255,255,0.4), transparent),
-    radial-gradient(1.5px 1.5px at 90% 55%, rgba(255,255,255,0.5), transparent),
-    var(--bg-deep);
+    radial-gradient(60% 50% at 78% 12%, var(--violet-glow), transparent 60%),
+    radial-gradient(55% 45% at 12% 85%, var(--blue-glow), transparent 60%),
+    radial-gradient(45% 40% at 55% 50%, rgba(99, 61, 190, 0.12), transparent 65%),
+    /* a faint diagonal Milky Way haze */
+    linear-gradient(118deg, transparent 38%, rgba(150, 140, 230, 0.07) 50%, transparent 62%),
+    linear-gradient(180deg, var(--space-1) 0%, var(--space-0) 55%, #03020c 100%);
+  filter: saturate(115%);
 }
 
-h1, h2, h3 { line-height: 1.15; margin: 0; letter-spacing: -0.01em; }
+/* A sparse, natural scatter. Hard color stops keep each dot crisp, but the
+   colours are dimmed and the tiles are large so stars stay subtle. Pointer
+   parallax moves nearer layers more than far ones. */
+.stars { position: absolute; inset: -320px; opacity: var(--star-opacity); transition: transform 0.35s ease-out; will-change: transform; }
 
+/* far, faint, fine stars */
+.stars-sm {
+  background-image:
+    radial-gradient(1px 1px at 40px 55px, rgba(255,255,255,0.7) 0 60%, transparent 61%),
+    radial-gradient(1px 1px at 190px 130px, rgba(220,226,255,0.55) 0 60%, transparent 61%),
+    radial-gradient(1px 1px at 110px 240px, rgba(255,255,255,0.6) 0 60%, transparent 61%),
+    radial-gradient(1px 1px at 260px 70px, rgba(230,235,255,0.5) 0 60%, transparent 61%);
+  background-repeat: repeat;
+  background-size: 300px 300px;
+  transform: translate3d(calc(var(--px, 0) * 5px), calc(var(--py, 0) * 5px), 0);
+}
+/* mid-distance stars, gentle twinkle */
+.stars-md {
+  background-image:
+    radial-gradient(1.4px 1.4px at 80px 90px, rgba(255,255,255,0.8) 0 58%, transparent 60%),
+    radial-gradient(1.3px 1.3px at 330px 250px, rgba(222,228,255,0.6) 0 58%, transparent 60%),
+    radial-gradient(1.3px 1.3px at 200px 380px, rgba(214,236,255,0.55) 0 58%, transparent 60%);
+  background-repeat: repeat;
+  background-size: 440px 440px;
+  transform: translate3d(calc(var(--px, 0) * 13px), calc(var(--py, 0) * 13px), 0);
+  animation: twinkle 6s ease-in-out infinite;
+}
+/* a few near, brighter stars with a soft halo */
+.stars-lg {
+  background-image:
+    radial-gradient(2px 2px at 140px 160px, #fff 0 55%, rgba(255,255,255,0.14) 58%, transparent 72%),
+    radial-gradient(1.8px 1.8px at 480px 360px, rgba(207,227,255,0.9) 0 55%, rgba(207,227,255,0.14) 58%, transparent 72%);
+  background-repeat: repeat;
+  background-size: 620px 620px;
+  transform: translate3d(calc(var(--px, 0) * 24px), calc(var(--py, 0) * 24px), 0);
+  animation: twinkle 9s ease-in-out infinite reverse;
+}
+@keyframes twinkle { 0%, 100% { opacity: calc(var(--star-opacity) * 1); } 50% { opacity: calc(var(--star-opacity) * 0.62); } }
+
+/* faint moon */
+.moon {
+  position: absolute; top: 8%; right: 9%;
+  width: 118px; height: 118px; border-radius: 50%;
+  background: radial-gradient(circle at 36% 33%, #f6f3ff 0%, #d2ccf3 40%, #9f98c8 72%, #6b66a0 100%);
+  box-shadow: 0 0 70px -8px rgba(198, 188, 255, 0.45), inset -16px -12px 32px rgba(8, 6, 26, 0.55);
+  opacity: 0.42;
+  transform: translate3d(calc(var(--px, 0) * 17px), calc(var(--py, 0) * 17px), 0);
+  transition: transform 0.35s ease-out;
+}
+:root[data-theme="light"] .moon { opacity: 0.3; }
+
+/* subtle constellation */
+.constellation {
+  position: absolute; top: 19%; left: 6%; width: 270px; height: auto;
+  color: var(--accent-2); opacity: 0.2;
+  transform: translate3d(calc(var(--px, 0) * 9px), calc(var(--py, 0) * 9px), 0);
+  transition: transform 0.35s ease-out;
+}
+
+/* a rare, slow shooting star */
+.shooting {
+  position: absolute; top: 12%; left: -10%;
+  width: 140px; height: 1px;
+  background: linear-gradient(90deg, transparent, #fff, transparent);
+  opacity: 0; transform: rotate(14deg);
+  filter: drop-shadow(0 0 6px rgba(255,255,255,0.8));
+  animation: shoot 14s ease-in infinite;
+}
+@keyframes shoot {
+  0%, 82% { opacity: 0; transform: translate(0, 0) rotate(14deg); }
+  85% { opacity: 1; }
+  96% { opacity: 0; transform: translate(70vw, 18vh) rotate(14deg); }
+  100% { opacity: 0; }
+}
+
+/* a soft vignette to settle the edges and focus the content */
+.starfield::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(120% 90% at 50% 30%, transparent 55%, rgba(2, 1, 10, 0.55) 100%);
+}
+:root[data-theme="light"] .starfield::after { background: radial-gradient(120% 90% at 50% 30%, transparent 60%, rgba(60, 50, 120, 0.12) 100%); }
+
+@media (prefers-reduced-motion: reduce) { .stars-md, .stars-lg, .shooting { animation: none; } .shooting { display: none; } }
+
+h1, h2, h3 { line-height: 1.12; margin: 0; letter-spacing: -0.01em; }
 a { color: var(--accent); text-decoration: none; }
 
-.eyebrow {
-  text-transform: uppercase;
-  letter-spacing: 0.18em;
-  font-size: 0.68rem;
-  color: var(--accent);
-  font-weight: 600;
-}
+.eyebrow { text-transform: uppercase; letter-spacing: 0.2em; font-size: 0.68rem; color: var(--accent-2); font-weight: 600; }
 .muted { color: var(--muted); }
 .dim { color: var(--text-dim); }
 
 /* ---- layout ---- */
 .shell { max-width: var(--maxw); margin: 0 auto; padding: 0 20px 120px; }
-
 .topbar {
   position: sticky; top: 0; z-index: 20;
-  display: flex; align-items: center; justify-content: space-between;
-  gap: 16px; padding: 18px 20px;
-  max-width: var(--maxw); margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 16px 20px; max-width: var(--maxw); margin: 0 auto;
   backdrop-filter: blur(10px);
 }
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.05rem; letter-spacing: -0.02em; }
+.brand { display: flex; align-items: center; gap: 11px; font-weight: 700; font-size: 1.1rem; letter-spacing: -0.02em; }
 .brand-mark {
-  width: 22px; height: 22px; border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, var(--accent-2), var(--accent) 55%, transparent 70%);
-  box-shadow: 0 0 18px var(--accent-soft);
+  width: 24px; height: 24px; border-radius: 50%;
+  background: radial-gradient(circle at 34% 30%, #fff 0%, var(--accent-2) 30%, var(--accent) 60%, transparent 72%);
+  box-shadow: 0 0 22px var(--accent), 0 0 44px var(--accent-soft);
 }
+.topbar-actions { display: flex; align-items: center; gap: 8px; }
+
+.icon-btn {
+  width: 40px; height: 40px; border-radius: 50%;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  cursor: pointer; font-size: 1.05rem; display: grid; place-items: center;
+  backdrop-filter: blur(var(--glass-blur)); transition: border-color 0.15s ease, transform 0.12s ease;
+}
+.icon-btn:hover { border-color: var(--border-strong); }
+.icon-btn:active { transform: scale(0.94); }
 
 /* ---- tabs ---- */
 .tabs {
-  display: flex; gap: 6px; padding: 6px;
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: 999px; width: fit-content; margin: 8px auto 32px;
-  flex-wrap: wrap; justify-content: center;
+  display: flex; gap: 6px; padding: 6px; width: fit-content; margin: 8px auto 34px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 999px;
+  backdrop-filter: blur(var(--glass-blur)); flex-wrap: wrap; justify-content: center;
 }
 .tab {
   border: 0; background: transparent; color: var(--text-dim);
@@ -107,56 +233,44 @@ a { color: var(--accent); text-decoration: none; }
   display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
 }
 .tab:hover { color: var(--text); }
-.tab[aria-selected="true"] {
-  background: var(--accent); color: var(--accent-ink);
-  box-shadow: 0 6px 20px -6px var(--accent);
-}
+.tab[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); box-shadow: 0 8px 24px -8px var(--accent); }
 
-/* ---- cards ---- */
+/* ---- cards (glassy, stars faintly behind) ---- */
 .card {
-  background: linear-gradient(180deg, var(--surface) 0%, var(--surface) 100%);
-  border: 1px solid var(--border); border-radius: var(--radius);
-  padding: 22px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 22px; backdrop-filter: blur(var(--glass-blur));
 }
 .card-glow { box-shadow: var(--shadow); }
 
-.hero { text-align: center; margin: 10px auto 30px; max-width: 640px; }
-.hero h1 { font-family: var(--font-display); font-size: clamp(2rem, 5vw, 3rem); font-weight: 600; }
-.hero p { color: var(--text-dim); margin-top: 12px; font-size: 1.02rem; }
+.hero { text-align: center; margin: 14px auto 32px; max-width: 660px; }
+.hero h1 { font-family: var(--font-display); font-size: clamp(2.1rem, 5.5vw, 3.3rem); font-weight: 600; letter-spacing: -0.02em; }
+.hero p { color: var(--text-dim); margin-top: 14px; font-size: 1.04rem; }
 
-.usp { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 18px; }
-.pill {
-  border: 1px solid var(--border); border-radius: 999px; padding: 6px 14px;
-  font-size: 0.8rem; color: var(--text-dim); background: var(--surface);
-}
-.pill b { color: var(--accent); font-weight: 600; }
+.usp { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 20px; }
+.pill { border: 1px solid var(--border); border-radius: 999px; padding: 6px 15px; font-size: 0.8rem; color: var(--text-dim); background: var(--surface); backdrop-filter: blur(var(--glass-blur)); }
+.pill b { color: var(--accent-2); font-weight: 600; }
 
 /* ---- forms ---- */
 .field { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
 .field > span { font-size: 0.78rem; color: var(--muted); font-weight: 600; }
 input, select, textarea {
-  background: var(--bg); color: var(--text);
+  background: rgba(255,255,255,0.04); color: var(--text);
   border: 1px solid var(--border-strong); border-radius: var(--radius-sm);
   padding: 11px 13px; font: inherit; width: 100%; outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
-input:focus, select:focus, textarea:focus {
-  border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft);
-}
+:root[data-theme="light"] input, :root[data-theme="light"] select, :root[data-theme="light"] textarea { background: rgba(255,255,255,0.7); }
+input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 textarea { resize: vertical; min-height: 56px; }
 .row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .geo-row { display: flex; gap: 10px; align-items: flex-end; }
 .geo-row .field { flex: 1; margin-bottom: 0; }
 
-.btn {
-  border: 0; border-radius: var(--radius-sm); padding: 11px 18px; cursor: pointer;
-  font: inherit; font-weight: 600; transition: transform 0.12s ease, opacity 0.15s ease;
-}
+.btn { border: 0; border-radius: var(--radius-sm); padding: 11px 18px; cursor: pointer; font: inherit; font-weight: 600; transition: transform 0.12s ease, opacity 0.15s ease; }
 .btn:active { transform: translateY(1px); }
 .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-primary { background: var(--accent); color: var(--accent-ink); box-shadow: 0 8px 22px -10px var(--accent); }
-.btn-ghost { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); }
-.btn-link { background: none; color: var(--accent); padding: 6px 2px; }
+.btn-primary { background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%); color: var(--accent-ink); box-shadow: 0 10px 26px -12px var(--accent); }
+.btn-ghost { background: var(--surface-2); color: var(--text); border: 1px solid var(--border); backdrop-filter: blur(var(--glass-blur)); }
 .btn-block { width: 100%; }
 
 .error { color: var(--danger); font-size: 0.86rem; margin-top: 8px; min-height: 1em; }
@@ -166,42 +280,40 @@ textarea { resize: vertical; min-height: 56px; }
 /* ---- auth ---- */
 .auth-wrap { min-height: 100vh; display: grid; place-items: center; padding: 24px; }
 .auth-card { width: 100%; max-width: 440px; }
+.auth-top { display: flex; justify-content: flex-end; margin-bottom: 4px; }
 
 /* ---- chat ---- */
 .thread { display: flex; flex-direction: column; gap: 16px; margin-bottom: 20px; }
-.bubble { padding: 14px 16px; border-radius: 14px; max-width: 85%; white-space: pre-wrap; }
-.bubble.user { align-self: flex-end; background: var(--accent); color: var(--accent-ink); border-bottom-right-radius: 4px; }
-.bubble.assistant { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+.bubble { padding: 14px 16px; border-radius: 16px; max-width: 85%; white-space: pre-wrap; }
+.bubble.user { align-self: flex-end; background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: var(--accent-ink); border-bottom-right-radius: 5px; }
+.bubble.assistant { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--border); border-bottom-left-radius: 5px; backdrop-filter: blur(var(--glass-blur)); }
 .trace { font-size: 0.76rem; color: var(--muted); margin-top: 6px; }
 .composer { display: flex; gap: 10px; align-items: flex-end; }
 .composer textarea { flex: 1; }
 
 /* ---- atlas ---- */
-.atlas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
-.nak-card { position: relative; overflow: hidden; }
-.nak-card .num { position: absolute; top: 14px; right: 16px; font-family: var(--font-display); font-size: 1.6rem; color: var(--border-strong); }
-.nak-symbol { font-size: 1.6rem; }
-.nak-name { font-family: var(--font-display); font-size: 1.3rem; font-weight: 600; margin-top: 6px; }
-.nak-south { color: var(--accent); font-size: 0.86rem; font-weight: 600; }
+.atlas-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(264px, 1fr)); gap: 16px; }
+.nak-card { position: relative; overflow: hidden; transition: transform 0.16s ease, border-color 0.16s ease; }
+.nak-card:hover { transform: translateY(-3px); border-color: var(--border-strong); }
+.nak-card .num { position: absolute; top: 14px; right: 18px; font-family: var(--font-display); font-size: 1.7rem; color: var(--border-strong); }
+.nak-symbol { font-size: 1.7rem; }
+.nak-name { font-family: var(--font-display); font-size: 1.35rem; font-weight: 600; margin-top: 6px; }
+.nak-south { color: var(--star-cyan); font-size: 0.86rem; font-weight: 600; }
 .nak-theme { color: var(--text-dim); margin: 10px 0 14px; font-size: 0.92rem; }
 .nak-attrs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; font-size: 0.82rem; }
 .nak-attrs div { display: flex; justify-content: space-between; gap: 8px; border-top: 1px solid var(--border); padding-top: 6px; }
-.nak-attrs span { color: var(--muted); }
+.nak-attrs span { color: var(--muted); text-transform: capitalize; }
 .nak-attrs b { font-weight: 600; text-align: right; }
 
 /* ---- chart facts ---- */
 .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; }
-.fact { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px; }
+.fact { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 16px; backdrop-filter: blur(var(--glass-blur)); }
 .fact .k { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.12em; color: var(--muted); }
-.fact .v { font-family: var(--font-display); font-size: 1.5rem; margin-top: 4px; }
+.fact .v { font-family: var(--font-display); font-size: 1.55rem; margin-top: 4px; }
 
-.score-ring {
-  --p: 0; width: 120px; height: 120px; border-radius: 50%;
-  background: conic-gradient(var(--accent) calc(var(--p) * 1%), var(--surface-3) 0);
-  display: grid; place-items: center; margin: 0 auto;
-}
-.score-ring .inner { width: 92px; height: 92px; border-radius: 50%; background: var(--surface); display: grid; place-items: center; text-align: center; }
-.score-ring .inner b { font-family: var(--font-display); font-size: 1.6rem; }
+.score-ring { --p: 0; width: 124px; height: 124px; border-radius: 50%; background: conic-gradient(var(--accent) calc(var(--p) * 1%), var(--surface-3) 0); display: grid; place-items: center; margin: 0 auto; box-shadow: 0 0 30px -8px var(--accent-soft); }
+.score-ring .inner { width: 94px; height: 94px; border-radius: 50%; background: var(--space-1); display: grid; place-items: center; text-align: center; }
+.score-ring .inner b { font-family: var(--font-display); font-size: 1.7rem; }
 
 .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 20px; }
 .toolbar input { max-width: 320px; }
