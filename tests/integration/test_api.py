@@ -500,6 +500,45 @@ class ApiTests(unittest.TestCase):
         response = self.client.post("/run", json={"query": "Question", "app_id": "unknown"}, headers=self._headers())
         self.assertEqual(response.status_code, 403)
 
+    _BIRTH = {"date": "1990-01-01", "time": "12:00:00", "place_name": "Chennai",
+              "latitude": 13.08, "longitude": 80.27, "utc_offset_hours": 5.5, "date_known": True}
+
+    def test_me_chart_summary_returns_rasi_nakshatra_lagna(self):
+        with patch("astroweave.api.main._user_profile", return_value={"email": "demo-user", "birth_details": self._BIRTH}), \
+             patch("astroweave.api.main.get_birth_chart", return_value={"d1": {}}), \
+             patch("astroweave.api.main.build_chart_view", return_value={"summary": {
+                 "moon_sign": "Aquarius", "janma_nakshatra": "Dhanishta pada 4 (lord Mars)",
+                 "lagna": "Pisces", "lagna_degree": 16.47, "sun_sign": "Sagittarius"}}):
+            response = self.client.get("/me/chart", headers=self._headers())
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json(), {
+            "rasi": "Aquarius", "nakshatra": "Dhanishta pada 4 (lord Mars)",
+            "lagna": "Pisces", "lagna_degree": 16.47, "sun_sign": "Sagittarius"})
+
+    def test_me_chart_requires_birth_details(self):
+        with patch("astroweave.api.main._user_profile", return_value={"email": "demo-user", "birth_details": {}}):
+            self.assertEqual(self.client.get("/me/chart", headers=self._headers()).status_code, 404)
+
+    def test_me_chart_503_when_chart_service_down(self):
+        from astroweave.common.tools.chart_client import ChartServiceUnavailable
+        with patch("astroweave.api.main._user_profile", return_value={"email": "demo-user", "birth_details": self._BIRTH}), \
+             patch("astroweave.api.main.get_birth_chart", side_effect=ChartServiceUnavailable("down")):
+            self.assertEqual(self.client.get("/me/chart", headers=self._headers()).status_code, 503)
+
+    def test_match_passes_user_and_partner_to_chart_service(self):
+        partner = {"date": "1992-05-20", "time": "08:30:00", "place_name": "Mumbai",
+                   "latitude": 19.08, "longitude": 72.88, "utc_offset_hours": 5.5}
+        canned = {"north": {"total": 24.0, "out_of": 36}, "south": {"matched_count": 7, "out_of": 10}}
+        with patch("astroweave.api.main._user_profile", return_value={"email": "demo-user", "birth_details": self._BIRTH}), \
+             patch("astroweave.api.main.match_charts", return_value=canned) as mock_match:
+            response = self.client.post("/match", json={"partner": partner, "person_is_groom": False}, headers=self._headers())
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["north"]["total"], 24.0)
+        person_arg = mock_match.call_args.args[0]
+        self.assertNotIn("date_known", person_arg)  # stripped before sending
+        self.assertEqual(person_arg["place_name"], "Chennai")
+        self.assertFalse(mock_match.call_args.kwargs["person_is_groom"])
+
 
 class PasswordResetTests(unittest.TestCase):
     """End-to-end reset/change-password against a real temp auth DB (no LLM)."""

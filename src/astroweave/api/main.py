@@ -28,7 +28,12 @@ from astroweave.common.security import (
     verify_user_token,
 )
 from astroweave.common.usage import UsageStore
-from astroweave.common.tools.chart_client import ChartServiceUnavailable
+from astroweave.common.astro import build_chart_view
+from astroweave.common.tools.chart_client import (
+    ChartServiceUnavailable,
+    get_birth_chart,
+    match_charts,
+)
 from astroweave.graphs.orchestrator.orchestrator_graph import build_orchestrator_graph
 from astroweave.orchestration.dispatcher.dispatcher import execute_specialist
 
@@ -202,6 +207,48 @@ def current_user(username: str = Depends(authenticated_username)) -> dict:
     if user is None:
         raise HTTPException(status_code=401, detail="Account not found.")
     return {"user": user}
+
+
+def _birth_for(username: str) -> dict:
+    """The signed-in user's stored birth details (minus the date_known flag)."""
+    profile = _user_profile(username)
+    birth = (profile or {}).get("birth_details")
+    if not birth:
+        raise HTTPException(status_code=404, detail="No birth details on file for this account.")
+    return {key: value for key, value in birth.items() if key != "date_known"}
+
+
+@app.get("/me/chart")
+def my_chart_summary(username: str = Depends(authenticated_username)) -> dict:
+    """The signed-in user's Rasi (Moon sign), Nakshatra, and Lagna for the side panel."""
+    birth = _birth_for(username)
+    try:
+        summary = build_chart_view(get_birth_chart(**birth), "general", "both").get("summary", {})
+    except ChartServiceUnavailable as error:
+        raise HTTPException(status_code=503, detail={"code": "chart_service_unavailable", "message": str(error)}) from error
+    return {
+        "rasi": summary.get("moon_sign"),
+        "nakshatra": summary.get("janma_nakshatra"),
+        "lagna": summary.get("lagna"),
+        "lagna_degree": summary.get("lagna_degree"),
+        "sun_sign": summary.get("sun_sign"),
+    }
+
+
+class MatchRequest(BaseModel):
+    partner: BirthDetails
+    person_is_groom: bool = True
+
+
+@app.post("/match")
+def kundli_match(request: MatchRequest, username: str = Depends(authenticated_username)) -> dict:
+    """Kundli Milan between the signed-in user and a partner (North + South + Manglik)."""
+    person = _birth_for(username)
+    partner = {key: value for key, value in request.partner.model_dump().items()}
+    try:
+        return match_charts(person, partner, person_is_groom=request.person_is_groom)
+    except ChartServiceUnavailable as error:
+        raise HTTPException(status_code=503, detail={"code": "chart_service_unavailable", "message": str(error)}) from error
 
 
 @app.post("/auth/change-password")

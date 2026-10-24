@@ -128,7 +128,15 @@
         <button class="icon-btn" data-theme-toggle title="Toggle light / dark">🌙</button>
       </div>
 
+      <div class="my-chart hidden" data-my-chart>
+        <div class="section-label" style="margin:0 0 .5rem">Your chart</div>
+        <div class="chart-fact"><span>Rasi</span><b data-my-rasi>—</b></div>
+        <div class="chart-fact"><span>Nakshatra</span><b data-my-nakshatra>—</b></div>
+        <div class="chart-fact"><span>Lagna</span><b data-my-lagna>—</b></div>
+      </div>
+
       <button class="btn-ghost" data-new-convo style="width:100%">＋ New conversation</button>
+      <button class="btn-ghost" data-open-match style="width:100%">☍ Kundli matching</button>
 
       <div class="section-label" style="margin:0">Recent</div>
       <div class="convo-list" data-convo-list>
@@ -196,6 +204,38 @@
           </form>
         </div>
       </div>
+
+      <!-- Kundli matching -->
+      <section class="match-view hidden" data-match-view>
+        <div class="match-head">
+          <button class="icon-btn" data-match-back title="Back">←</button>
+          <div>
+            <div class="eyebrow">Kundli Milan</div>
+            <h2>Match a partner's chart</h2>
+          </div>
+        </div>
+        <p class="intro">Enter your partner's birth details. We compute the North-Indian 36-point Guna Milan and the South-Indian poruthams from both charts — the scores are calculated, not guessed.</p>
+        <form data-match-form class="match-form">
+          <div class="row-2">
+            <label class="field"><span class="field-label">Birth date</span><input type="date" name="date" min="1900-01-01" required /></label>
+            <label class="field"><span class="field-label">Birth time</span><input type="time" name="time" step="1" required /></label>
+          </div>
+          <div class="geo-row">
+            <label class="field" style="flex:1"><span class="field-label">Birth place (India)</span><input name="place" placeholder="e.g. Mumbai, India" /></label>
+            <button type="button" class="btn-ghost" data-match-geocode>Find</button>
+          </div>
+          <div class="geo-result" data-match-geo></div>
+          <div class="composer-bar">
+            <select name="role" aria-label="Your role">
+              <option value="groom">I am the groom</option>
+              <option value="bride">I am the bride</option>
+            </select>
+            <button type="submit" class="btn-primary" data-match-submit disabled>Match charts</button>
+          </div>
+          <div class="error-text" data-match-error></div>
+        </form>
+        <div data-match-result></div>
+      </section>
     </main>
   </div>
 

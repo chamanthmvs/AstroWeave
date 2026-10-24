@@ -54,8 +54,29 @@ def get_birth_chart(
         "include_ashtakavarga": include_ashtakavarga,
     }
     logger.info("Requesting chart from chart_service date=%s time=%s", date, time)
+    return _post("/chart", payload, timeout)
+
+
+def match_charts(
+    person: dict,
+    partner: dict,
+    person_is_groom: bool = True,
+    timeout: float = 15.0,
+) -> dict[str, object]:
+    """Kundli Milan for two births via chart_service /match.
+
+    `person` and `partner` are birth-detail dicts (date, time, latitude,
+    longitude, utc_offset_hours, place_name, optional time_known). Returns the
+    North Ashtakoota + South porutham + Manglik result.
+    """
+    payload = {"person": person, "partner": partner, "person_is_groom": person_is_groom}
+    logger.info("Requesting match from chart_service")
+    return _post("/match", payload, timeout)
+
+
+def _post(path: str, payload: dict, timeout: float) -> dict[str, object]:
     try:
-        response = httpx.post(f"{CHART_SERVICE_URL.rstrip('/')}/chart", json=payload, timeout=timeout)
+        response = httpx.post(f"{CHART_SERVICE_URL.rstrip('/')}{path}", json=payload, timeout=timeout)
     except httpx.TransportError as error:
         # Connection refused, DNS failure, timeout, etc. — the service is down
         # or unreachable. Distinct from a bad response, which we let through.

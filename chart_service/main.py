@@ -433,3 +433,163 @@ def compute_chart(request: ChartRequest) -> dict[str, object]:
 
     logger.info("Chart computed successfully date=%s time=%s", request.date, request.time)
     return result
+
+
+# --- Kundli matching (Ashtakoota / Guna Milan + South poruthams) -----------
+# Compatibility math is PyJHora's validated Ashtakoota engine (classical nadi,
+# gana, bhakoot, mahendra, vedha, rajju rules verified by hand in
+# chart_service/test_match.py). Nothing here invents a score.
+
+from jhora.horoscope.match import compatibility as _compat  # noqa: E402
+from jhora.horoscope.match.compatibility import Ashtakoota  # noqa: E402
+
+# PyJHora ships a typo in the South rajju "aarohana" set for the neck group:
+# neck_aaroga_rajju = [413, 22] should be [4, 13, 22] (4 and 13 got concatenated).
+# Left uncorrected it misclassifies Rohini(4)/Hasta(13) and gives a wrong South
+# rajju verdict against neck-avarohana stars. Correct it here. (Verified against
+# the classical aarohana/avarohana grouping in test_match.py.)
+if 413 in _compat.neck_aaroga_rajju:
+    _compat.neck_aaroga_rajju = [4, 13, 22]
+
+NAKSHATRAS = [
+    "Ashwini", "Bharani", "Krittika", "Rohini", "Mrigashira", "Ardra", "Punarvasu",
+    "Pushya", "Ashlesha", "Magha", "Purva Phalguni", "Uttara Phalguni", "Hasta",
+    "Chitra", "Swati", "Vishakha", "Anuradha", "Jyeshtha", "Mula", "Purva Ashadha",
+    "Uttara Ashadha", "Shravana", "Dhanishta", "Shatabhisha", "Purva Bhadrapada",
+    "Uttara Bhadrapada", "Revati",
+]
+NAKSHATRA_LORDS = ["Ketu", "Venus", "Sun", "Moon", "Mars", "Rahu", "Jupiter", "Saturn", "Mercury"]
+MANGLIK_HOUSES = {1, 2, 4, 7, 8, 12}  # Mars in these houses = Kuja/Mangal dosha
+# North Ashtakoota: (label, max points), in the order compatibility_score() returns them.
+_NORTH_KOOTAS = [
+    ("Varna", 1), ("Vasya", 2), ("Gana", 6), ("Tara", 3),
+    ("Yoni", 4), ("Graha Maitri", 5), ("Bhakoot", 7), ("Nadi", 8),
+]
+# South 10 poruthams -> their index in compatibility_score(method="South").
+_SOUTH_PORUTHAMS = [
+    ("Dina", 3), ("Gana", 2), ("Mahendra", 9), ("Stree Dheerga", 12), ("Yoni", 4),
+    ("Rasi", 6), ("Rasyadhipathi", 5), ("Vasya", 1), ("Rajju", 11), ("Vedha", 10),
+]
+
+
+class MatchBirth(BaseModel):
+    date: str = Field(..., description="YYYY-MM-DD")
+    time: str = Field(..., description="HH:MM:SS (24-hour, local)")
+    latitude: float = Field(..., ge=-90, le=90)
+    longitude: float = Field(..., ge=-180, le=180)
+    utc_offset_hours: float
+    place_name: str | None = None
+    time_known: bool = True
+
+
+class MatchRequest(BaseModel):
+    person: MatchBirth
+    partner: MatchBirth
+    person_is_groom: bool = Field(default=True, description="If true, person=groom/boy, partner=bride/girl.")
+    ayanamsa: str = Field(default=DEFAULT_AYANAMSA)
+
+
+def _match_birth_jd_place(birth: MatchBirth):
+    year, month, day = (int(p) for p in birth.date.split("-"))
+    hour, minute, second = (int(p) for p in birth.time.split(":"))
+    place = drik.Place(birth.place_name or "unspecified", birth.latitude, birth.longitude, birth.utc_offset_hours)
+    return drik.utils.julian_day_number((year, month, day), (hour, minute, second)), place
+
+
+def _match_points(birth: MatchBirth) -> dict[str, object]:
+    """Moon nakshatra+pada, Moon rasi, lagna, and Manglik status for one birth.
+    Call with the Parashari ayanamsa already set (inside the calculation lock)."""
+    julian_day, place = _match_birth_jd_place(birth)
+    positions = dict(charts.rasi_chart(julian_day, place))
+    moon_sign, moon_long = positions[1]
+    mars_sign, _mars_long = positions[2]
+    lagna_sign, _lagna_long = positions["L"]
+    nak_number, pada, _rem = drik.nakshatra_pada(moon_sign * 30 + moon_long)
+    house = lambda sign: (sign - lagna_sign) % 12 + 1
+    mars_house_lagna = (mars_sign - lagna_sign) % 12 + 1
+    mars_house_moon = (mars_sign - moon_sign) % 12 + 1
+    return {
+        "rasi": RASI_NAMES[moon_sign],
+        "rasi_index": moon_sign,
+        "nakshatra": NAKSHATRAS[nak_number - 1],
+        "nakshatra_number": nak_number,
+        "pada": pada,
+        "nakshatra_lord": NAKSHATRA_LORDS[(nak_number - 1) % 9],
+        "lagna": RASI_NAMES[lagna_sign],
+        "lagna_index": lagna_sign,
+        "time_known": birth.time_known,
+        "manglik": {
+            "mars_house_from_lagna": mars_house_lagna,
+            "mars_house_from_moon": mars_house_moon,
+            "is_manglik": mars_house_lagna in MANGLIK_HOUSES,
+            "manglik_from_moon": mars_house_moon in MANGLIK_HOUSES,
+        },
+    }
+
+
+def _ashtakoota(groom: dict, bride: dict) -> dict[str, object]:
+    args = (groom["nakshatra_number"], groom["pada"], bride["nakshatra_number"], bride["pada"])
+    north = Ashtakoota(*args, method="North").compatibility_score()
+    south = Ashtakoota(*args, method="South").compatibility_score()
+
+    kootas = []
+    for index, (label, maximum) in enumerate(_NORTH_KOOTAS):
+        score = round(float(north[index]), 1)
+        kootas.append({"koota": label, "score": score, "max": maximum, "favourable": score > 0})
+    total = round(float(north[8]), 1)
+
+    poruthams = [{"porutham": label, "matched": bool(south[idx])} for label, idx in _SOUTH_PORUTHAMS]
+    matched = sum(p["matched"] for p in poruthams)
+
+    return {
+        "north": {
+            "system": "Ashtakoota / Guna Milan (North Indian, 36 points)",
+            "kootas": kootas,
+            "total": total,
+            "out_of": 36,
+            "nadi_dosha": kootas[7]["score"] == 0,     # Nadi == 0
+            "bhakoot_dosha": kootas[6]["score"] == 0,  # Bhakoot == 0
+        },
+        "south": {
+            "system": "Dasa Porutham (South Indian, 10 poruthams)",
+            "poruthams": poruthams,
+            "matched_count": matched,
+            "out_of": 10,
+            "minimum_poruthams_met": bool(south[13]),
+        },
+    }
+
+
+@app.post("/match")
+def compute_match(request: MatchRequest) -> dict[str, object]:
+    """Kundli Milan for two births: North Ashtakoota + South poruthams + Manglik."""
+    for who, birth in (("person", request.person), ("partner", request.partner)):
+        try:
+            [int(p) for p in birth.date.split("-")]
+            [int(p) for p in birth.time.split(":")]
+        except ValueError as error:
+            raise HTTPException(status_code=422, detail=f"Invalid {who} date/time: {error}") from error
+    if request.ayanamsa.upper() not in {m.upper() for m in const.available_ayanamsa_modes}:
+        raise HTTPException(status_code=422, detail=f"Unsupported ayanamsa '{request.ayanamsa}'.")
+
+    with _CALCULATION_LOCK:
+        drik.set_ayanamsa_mode(request.ayanamsa.upper())
+        person = _match_points(request.person)
+        partner = _match_points(request.partner)
+
+    groom, bride = (person, partner) if request.person_is_groom else (partner, person)
+    result = _ashtakoota(groom, bride)
+    result["person"] = person
+    result["partner"] = partner
+    result["roles"] = {
+        "groom": "person" if request.person_is_groom else "partner",
+        "bride": "partner" if request.person_is_groom else "person",
+    }
+    result["manglik"] = {
+        "person": person["manglik"],
+        "partner": partner["manglik"],
+        "both_manglik": person["manglik"]["is_manglik"] and partner["manglik"]["is_manglik"],
+    }
+    result["meta"] = {"ayanamsa": request.ayanamsa.upper(), "zodiac": "sidereal"}
+    logger.info("Match computed north=%s/36 south=%s/10", result["north"]["total"], result["south"]["matched_count"])
+    return result

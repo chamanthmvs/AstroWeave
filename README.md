@@ -164,6 +164,24 @@ logged for the operator and an **admin** can mint one to hand over via
 password hash, so it stops working the moment the password changes. Wire an
 email sender later to deliver the token automatically.
 
+### Kundli matching (Guna Milan)
+
+`POST /match` computes marriage compatibility between the signed-in user and a
+partner's birth details: the **North-Indian 36-point Ashtakoota** (Varna, Vasya,
+Gana, Tara, Yoni, Graha Maitri, Bhakoot, Nadi), the **South-Indian 10 poruthams**,
+and **Manglik (Kuja) dosha** for each person. The scores come from PyJHora's
+validated Ashtakoota engine in the chart service (`/match`); `chart_service/test_match.py`
+holds the engine to classical rules across all 27x27 nakshatra pairs and corrects a
+PyJHora typo in the South rajju neck group. The UI has a dedicated **Kundli matching**
+screen (partner form + geocode) that renders the full breakdown. `GET /me/chart`
+returns the user's **Rasi, Nakshatra, and Lagna**, shown in a persistent left panel.
+
+Run the matching validation tests (they need the chart service's own venv, which has PyJHora):
+
+```bash
+cd chart_service && ./.venv/bin/python test_match.py
+```
+
 ### Rate limiting
 
 Because every `/run` spends money on the LLM provider's key, the endpoint has a

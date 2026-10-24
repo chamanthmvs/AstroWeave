@@ -18,6 +18,12 @@
   var $ = function (sel, root) { return (root || document).querySelector(sel); };
   var $$ = function (sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); };
 
+  function esc(value) {
+    var d = document.createElement("div");
+    d.textContent = value == null ? "" : String(value);
+    return d.innerHTML;
+  }
+
   function store(key, val) {
     try {
       if (val === null) localStorage.removeItem(key);
@@ -273,8 +279,20 @@
     $("[data-user-email]").textContent = (state.user && state.user.email) || "";
     $("[data-avatar]").textContent = initials(state.user && state.user.name);
     refreshConversations();
+    loadMyChart();
     if (state.conversationId) loadMessages(state.conversationId);
     else renderThread([]);
+  }
+
+  // The persistent "Your chart" panel: Rasi, Nakshatra, Lagna.
+  function loadMyChart() {
+    api("/me/chart").then(function (data) {
+      if (!data || !data.rasi) return;
+      $("[data-my-rasi]").textContent = data.rasi || "—";
+      $("[data-my-nakshatra]").textContent = data.nakshatra || "—";
+      $("[data-my-lagna]").textContent = (data.lagna || "—") + (data.lagna_degree != null ? " " + data.lagna_degree + "°" : "");
+      $("[data-my-chart]").classList.remove("hidden");
+    }).catch(function () { /* chart service may be down; panel stays hidden */ });
   }
 
   function refreshConversations() {
@@ -375,6 +393,48 @@
       .map(function (t) { return t.specialist.charAt(0).toUpperCase() + t.specialist.slice(1); });
     if (!names.length) return "";
     return "Consulted: " + names.join(" · ");
+  }
+
+  function renderMatch(data) {
+    var n = data.north || {}, s = data.south || {}, m = data.manglik || {};
+    function person(side, title) {
+      var p = data[side] || {};
+      return '<div class="pair-card"><h4>' + title + '</h4>' +
+        '<div class="chart-fact"><span>Rasi</span><b>' + esc(p.rasi) + "</b></div>" +
+        '<div class="chart-fact"><span>Nakshatra</span><b>' + esc(p.nakshatra) + " (pada " + esc(p.pada) + ")</b></div>" +
+        '<div class="chart-fact"><span>Lagna</span><b>' + esc(p.lagna) + "</b></div>" +
+        '<div class="chart-fact"><span>Manglik</span><b>' + ((p.manglik || {}).is_manglik ? "Yes" : "No") + "</b></div></div>";
+    }
+    var kootas = (n.kootas || []).map(function (k) {
+      return "<tr><td>" + esc(k.koota) + '</td><td class="n">' + k.score + " / " + k.max +
+        '</td><td class="' + (k.favourable ? "yes" : "no") + '">' + (k.favourable ? "✓" : "—") + "</td></tr>";
+    }).join("");
+    var poruthams = (s.poruthams || []).map(function (p) {
+      return "<tr><td>" + esc(p.porutham) + '</td><td class="' + (p.matched ? "yes" : "no") + '">' +
+        (p.matched ? "match" : "no") + "</td></tr>";
+    }).join("");
+    var doshas = [];
+    doshas.push('<span class="dosha ' + (n.nadi_dosha ? "warn" : "ok") + '">Nadi dosha: ' + (n.nadi_dosha ? "present" : "none") + "</span>");
+    doshas.push('<span class="dosha ' + (n.bhakoot_dosha ? "warn" : "ok") + '">Bhakoot dosha: ' + (n.bhakoot_dosha ? "present" : "none") + "</span>");
+    doshas.push('<span class="dosha ' + (m.both_manglik ? "ok" : (m.person && m.person.is_manglik || m.partner && m.partner.is_manglik ? "warn" : "ok")) +
+      '">Manglik: ' + (m.both_manglik ? "both (mutually offset)" : ((m.person && m.person.is_manglik) || (m.partner && m.partner.is_manglik) ? "one partner" : "neither")) + "</span>");
+
+    $("[data-match-result]").innerHTML =
+      '<div class="match-result">' +
+      '<div class="score-hero">' +
+        '<div class="score-card"><div class="label">North · Guna Milan</div><div class="big">' + n.total + " / 36</div></div>" +
+        '<div class="score-card"><div class="label">South · Poruthams</div><div class="big">' + s.matched_count + " / 10</div>" +
+          '<div class="label" style="margin-top:.3rem">min. poruthams ' + (s.minimum_poruthams_met ? "met" : "not met") + "</div></div>" +
+      "</div>" +
+      '<div class="dosha-row">' + doshas.join("") + "</div>" +
+      '<div class="pair-grid">' + person("person", "You") + person("partner", "Partner") + "</div>" +
+      "<h3>North Indian — Ashtakoota (36 points)</h3>" +
+      '<table class="match-table"><thead><tr><th>Koota</th><th class="n">Score</th><th></th></tr></thead><tbody>' + kootas + "</tbody></table>" +
+      "<h3>South Indian — Dasa Porutham</h3>" +
+      '<table class="match-table"><thead><tr><th>Porutham</th><th></th></tr></thead><tbody>' + poruthams + "</tbody></table>" +
+      '<p class="note">These are the calculated scores. Kundli matching is one input among many — a low score is not a verdict against a marriage, and a high one is not a guarantee. Roles were computed with you as the ' +
+      esc(data.roles && data.roles.groom === "person" ? "groom" : "bride") + "; switch the role selector to recompute.</p>" +
+      "</div>";
   }
 
   function renderThread(messages) {
@@ -498,6 +558,56 @@
     $("[data-signout]").addEventListener("click", signOut);
     $("[data-menu]").addEventListener("click", openNav);
     $("[data-scrim]").addEventListener("click", closeNav);
+
+    // Kundli matching view
+    function setMainMode(mode) {
+      var chat = mode !== "match";
+      ["[data-thread]", ".composer"].forEach(function (s) { var el = $(s); if (el) el.classList.toggle("hidden", !chat); });
+      $(".main-head").classList.toggle("hidden", !chat);
+      $("[data-match-view]").classList.toggle("hidden", chat);
+    }
+    $("[data-open-match]").addEventListener("click", function () { setMainMode("match"); closeNav(); });
+    $("[data-match-back]").addEventListener("click", function () { setMainMode("chat"); });
+
+    var matchForm = $("[data-match-form]");
+    var matchPartner = null;  // geocoded partner coords
+    function resetMatchGeo() {
+      matchPartner = null;
+      $("[data-match-submit]").disabled = true;
+      var r = $("[data-match-geo]"); r.textContent = ""; r.classList.remove("ok-text");
+    }
+    matchForm.place.addEventListener("input", resetMatchGeo);
+    $("[data-match-geocode]").addEventListener("click", function () {
+      var place = matchForm.place.value.trim();
+      var geo = $("[data-match-geo]");
+      if (!place) { geo.textContent = "Enter a place name first."; return; }
+      geo.classList.remove("ok-text"); geo.textContent = "Looking up…";
+      api("/geocode?place=" + encodeURIComponent(place)).then(function (data) {
+        matchPartner = data;
+        $("[data-match-submit]").disabled = false;
+        geo.classList.add("ok-text");
+        geo.textContent = "✓ " + (data.display_name || place) + " · " + data.latitude.toFixed(3) + ", " + data.longitude.toFixed(3);
+      }).catch(function (err) { resetMatchGeo(); geo.textContent = errorMessage(err); });
+    });
+    matchForm.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var errEl = $("[data-match-error]"); errEl.textContent = "";
+      if (!matchPartner) { errEl.textContent = "Find the partner's birth place first."; return; }
+      var btn = $("[data-match-submit]");
+      btn.disabled = true; btn.textContent = "Matching…";
+      api("/match", { method: "POST", body: {
+        person_is_groom: matchForm.role.value === "groom",
+        partner: {
+          date: matchForm.date.value,
+          time: matchForm.time.value.length === 5 ? matchForm.time.value + ":00" : matchForm.time.value,
+          latitude: matchPartner.latitude, longitude: matchPartner.longitude,
+          utc_offset_hours: matchPartner.utc_offset_hours,
+          place_name: matchPartner.display_name || matchForm.place.value.trim(),
+        },
+      } }).then(renderMatch).catch(function (err) {
+        errEl.textContent = err.status === 503 ? "The chart service is unavailable — start it and try again." : "Match failed: " + errorMessage(err);
+      }).finally(function () { btn.disabled = false; btn.textContent = "Match charts"; });
+    });
 
     // Change password (signed in)
     var cpForm = $("[data-change-password-form]");
