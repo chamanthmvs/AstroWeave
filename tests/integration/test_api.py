@@ -273,10 +273,11 @@ class ApiTests(unittest.TestCase):
     def test_admin_summary_requires_a_token(self):
         self.assertEqual(self.client.get("/admin/summary").status_code, 401)
 
-    def test_admin_page_is_served(self):
-        response = self.client.get("/admin")
+    def test_root_is_api_only(self):
+        # Backend is API-only now; the frontend is the separate Next.js app.
+        response = self.client.get("/")
         self.assertEqual(response.status_code, 200)
-        self.assertIn("text/html", response.headers["content-type"])
+        self.assertEqual(response.json()["service"], "astroweave-api")
 
     def test_run_requires_query(self):
         response = self.client.post(

@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/auth";
 import BirthFields, { emptyBirth, isGeocoded, type BirthForm } from "./BirthFields";
 import ThemeToggle from "./ThemeToggle";
 
-type Mode = "signin" | "register" | "request";
+type Mode = "signin" | "register" | "request" | "reset";
 
 export default function AuthView() {
   const { signIn, register } = useAuth();
@@ -17,6 +17,9 @@ export default function AuthView() {
   const [name, setName] = useState("");
   const [gender, setGender] = useState("female");
   const [note, setNote] = useState("");
+  const [resetCode, setResetCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [info, setInfo] = useState("");
   const [birth, setBirth] = useState<BirthForm>(emptyBirth);
   const [error, setError] = useState("");
   const [done, setDone] = useState("");
@@ -27,6 +30,25 @@ export default function AuthView() {
     setStep("email");
     setError("");
     setDone("");
+    setInfo("");
+  }
+
+  async function requestReset() {
+    setError("");
+    setInfo("");
+    if (!email.trim()) {
+      setError("Enter your email first.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await api("/auth/request-reset", { method: "POST", auth: false, body: { email: email.trim().toLowerCase() } });
+      setInfo("If that account exists, a reset code has been created. Ask the AstroWeave team for your code, then enter it below.");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Could not start the reset.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   // Register step 1: only continue once we know this email is invited.
@@ -63,6 +85,14 @@ export default function AuthView() {
     try {
       if (mode === "signin") {
         await signIn(email, password);
+      } else if (mode === "reset") {
+        if (newPassword.length < 8) throw new Error("New password must be at least 8 characters.");
+        await api("/auth/reset", {
+          method: "POST",
+          auth: false,
+          body: { token: resetCode.trim(), new_password: newPassword },
+        });
+        setDone("Your password has been reset. You can now sign in.");
       } else if (mode === "request") {
         await api("/auth/request-access", {
           method: "POST",
@@ -144,6 +174,32 @@ export default function AuthView() {
               <button type="button" className="btn-link" onClick={() => switchMode("request")}>Request an invite</button>
             </p>
           </form>
+        ) : mode === "reset" ? (
+          <form className="card card-glow" onSubmit={submit}>
+            <div className="section-title" style={{ marginBottom: 6 }}>Reset your password</div>
+            <div className="geo-row">
+              <label className="field" style={{ flex: 1 }}>
+                <span>Email</span>
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@gmail.com" required />
+              </label>
+              <button type="button" className="btn btn-ghost" onClick={requestReset} disabled={busy}>Send request</button>
+            </div>
+            <p className="note" style={{ marginTop: 2 }}>
+              Email isn&apos;t enabled, so the team hands you a reset code — enter it below with a new password.
+            </p>
+            {info && <p className="ok">{info}</p>}
+            <label className="field"><span>Reset code</span>
+              <input value={resetCode} onChange={(e) => setResetCode(e.target.value)} placeholder="Paste the reset code" autoComplete="one-time-code" />
+            </label>
+            <label className="field"><span>New password</span>
+              <input type="password" autoComplete="new-password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="At least 8 characters" />
+            </label>
+            <button className="btn btn-primary btn-block" disabled={busy}>{busy ? "…" : "Reset password"}</button>
+            <p className="error">{error}</p>
+            <p className="note center">
+              <button type="button" className="btn-link" onClick={() => switchMode("signin")}>← Back to sign in</button>
+            </p>
+          </form>
         ) : (
           <form className="card card-glow" onSubmit={submit}>
             {(mode === "register" || mode === "request") && (
@@ -206,6 +262,11 @@ export default function AuthView() {
               {busy ? "…" : mode === "signin" ? "Continue" : mode === "request" ? "Request access" : "Create account"}
             </button>
             <p className="error">{error}</p>
+            {mode === "signin" && (
+              <p className="note center">
+                <button type="button" className="btn-link" onClick={() => switchMode("reset")}>Forgot password?</button>
+              </p>
+            )}
           </form>
         )}
       </div>

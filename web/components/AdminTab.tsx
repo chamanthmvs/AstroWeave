@@ -19,6 +19,8 @@ export default function AdminTab() {
   const [allowed, setAllowed] = useState<Allowed[]>([]);
   const [requests, setRequests] = useState<AccessReq[]>([]);
   const [newEmail, setNewEmail] = useState("");
+  const [resetEmail, setResetEmail] = useState("");
+  const [mintedCode, setMintedCode] = useState("");
   const [error, setError] = useState("");
 
   const load = useCallback(async () => {
@@ -57,6 +59,19 @@ export default function AdminTab() {
   async function decline(email: string) {
     await api(`/admin/access-requests/${encodeURIComponent(email)}`, { method: "DELETE" });
     load();
+  }
+  async function mintReset() {
+    setError("");
+    setMintedCode("");
+    try {
+      const res = await api<{ reset_token: string }>("/admin/reset-token", {
+        method: "POST",
+        body: { email: resetEmail.trim().toLowerCase() },
+      });
+      setMintedCode(res.reset_token);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Could not mint a reset code.");
+    }
   }
 
   return (
@@ -128,6 +143,21 @@ export default function AdminTab() {
               </div>
             ))}
           </div>
+        )}
+      </div>
+
+      <div className="card">
+        <div className="section-title">Reset a user&apos;s password</div>
+        <p className="note" style={{ marginTop: 6 }}>Generate a one-time reset code to hand to a locked-out user (valid 30 min).</p>
+        <div className="geo-row" style={{ marginTop: 10 }}>
+          <label className="field">
+            <span>User email</span>
+            <input value={resetEmail} onChange={(e) => setResetEmail(e.target.value)} placeholder="person@gmail.com" />
+          </label>
+          <button className="btn btn-primary" disabled={!resetEmail.trim()} onClick={mintReset}>Mint code</button>
+        </div>
+        {mintedCode && (
+          <p className="ok mono" style={{ marginTop: 10, wordBreak: "break-all" }}>{mintedCode}</p>
         )}
       </div>
 

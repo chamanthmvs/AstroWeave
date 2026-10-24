@@ -10,6 +10,7 @@ import AtlasTab from "@/components/AtlasTab";
 import AdminTab from "@/components/AdminTab";
 import ThemeToggle from "@/components/ThemeToggle";
 import QuotaBadge from "@/components/QuotaBadge";
+import ChangePassword from "@/components/ChangePassword";
 
 type TabKey = "chart" | "ask" | "match" | "atlas" | "admin";
 
@@ -46,6 +47,7 @@ export default function Home() {
           <QuotaBadge />
         </div>
         <div className="topbar-actions">
+          <ChangePassword />
           <ThemeToggle />
           <button className="btn btn-ghost" onClick={signOut}>
             Sign out

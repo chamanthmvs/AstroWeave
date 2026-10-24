@@ -1,13 +1,10 @@
 import hashlib
 import json
 import os
-from pathlib import Path
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 from langgraph.runtime import Runtime
 from pydantic import BaseModel, Field
 
@@ -857,19 +854,9 @@ def _execution_trace(state: dict) -> list[dict]:
     return trace
 
 
-# --- Static single-page frontend -------------------------------------------
-# The SPA lives in <repo>/frontend and is served from the same origin as the
-# API, so the browser needs no CORS configuration. Mounting is guarded so the
-# API (and its tests) still boot when the frontend directory is absent.
-_FRONTEND_DIR = Path(__file__).resolve().parents[3] / "frontend"
-if _FRONTEND_DIR.is_dir():
-    app.mount("/static", StaticFiles(directory=_FRONTEND_DIR), name="static")
-
-    @app.get("/", include_in_schema=False)
-    def spa_index() -> FileResponse:
-        return FileResponse(_FRONTEND_DIR / "index.html")
-
-    @app.get("/admin", include_in_schema=False)
-    def admin_page() -> FileResponse:
-        # The shell is public; the data it loads from /admin/summary is admin-gated.
-        return FileResponse(_FRONTEND_DIR / "admin.html")
+# --- Root ------------------------------------------------------------------
+# The backend is API-only; the user-facing app is the separate Next.js frontend
+# (web/, deployed on Vercel). The root just points at the interactive docs.
+@app.get("/", include_in_schema=False)
+def root() -> dict[str, str]:
+    return {"service": "astroweave-api", "docs": "/docs"}
