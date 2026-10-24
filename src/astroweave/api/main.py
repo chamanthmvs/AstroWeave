@@ -32,7 +32,7 @@ from astroweave.common.security import (
     verify_verification_token,
 )
 from astroweave.common.usage import UsageStore
-from astroweave.common.astro import build_chart_view, build_profile
+from astroweave.common.astro import build_chart_view, build_profile, nakshatra_catalog
 from astroweave.common.tools.chart_client import (
     ChartServiceUnavailable,
     get_birth_chart,
@@ -436,6 +436,16 @@ def _direct_specialist(app_id: str | None) -> str | None:
 def health() -> dict[str, str]:
     logger.debug("Health check requested")
     return {"status": "ok", "service": "astroweave-api"}
+
+
+@app.get("/nakshatras")
+def nakshatras() -> dict[str, object]:
+    """The 27 nakshatras with canonical attributes for the Star Atlas tab.
+
+    Deterministic classical reference (names, symbol, deity, ruling planet,
+    gana, yoni, nadi, theme, sidereal span). Public: no auth, no chart needed.
+    """
+    return {"nakshatras": nakshatra_catalog()}
 
 
 @app.get("/geocode")

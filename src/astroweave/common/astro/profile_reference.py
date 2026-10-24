@@ -12,6 +12,62 @@ the gana / nadi / yoni groupings match those validated in the matching tests.
 
 from __future__ import annotations
 
+# North-Indian / Sanskrit nakshatra names, index 0 = Ashwini .. 26 = Revati.
+NAKSHATRA_NAME = [
+    "Ashwini", "Bharani", "Krittika", "Rohini", "Mrigashira", "Ardra", "Punarvasu",
+    "Pushya", "Ashlesha", "Magha", "Purva Phalguni", "Uttara Phalguni", "Hasta",
+    "Chitra", "Swati", "Vishakha", "Anuradha", "Jyeshtha", "Mula", "Purva Ashadha",
+    "Uttara Ashadha", "Shravana", "Dhanishta", "Shatabhisha", "Purva Bhadrapada",
+    "Uttara Bhadrapada", "Revati",
+]
+# South-Indian (Tamil) names in common use, same index order.
+NAKSHATRA_SOUTH_NAME = [
+    "Aswini", "Bharani", "Karthigai", "Rohini", "Mirugasirisham", "Thiruvathirai",
+    "Punarpoosam", "Poosam", "Ayilyam", "Magam", "Pooram", "Uthiram", "Hastham",
+    "Chithirai", "Swathi", "Visakam", "Anusham", "Kettai", "Moolam", "Pooradam",
+    "Uthiradam", "Thiruvonam", "Avittam", "Sadayam", "Pooratathi", "Uthiratathi",
+    "Revathi",
+]
+# Short classical theme (what the nakshatra chiefly represents), grounded in its
+# traditional symbol and deity - not a personality prediction.
+NAKSHATRA_THEME = [
+    "swift action, healing and fresh starts",
+    "restraint, bearing and transformation",
+    "sharp purification and fire",
+    "growth, fertility and nourishment",
+    "searching, curiosity and gentle quest",
+    "storm, upheaval and renewal",
+    "return, renewal and safe repetition",
+    "nourishment, support and care",
+    "entwining insight and hidden depth",
+    "ancestry, throne and legacy",
+    "pleasure, rest and union",
+    "patronage, friendship and generous order",
+    "skill of the hands and craft",
+    "brilliance, design and dazzling form",
+    "independence, movement and balance",
+    "focused purpose and determination",
+    "devotion and cooperative success",
+    "seniority, protection and hard-won authority",
+    "roots, inquiry and dissolution",
+    "invincibility and early momentum",
+    "lasting victory and integrity",
+    "listening, learning and connection",
+    "rhythm, wealth and music",
+    "healing, secrecy and the hundred physicians",
+    "intensity, idealism and fiery vision",
+    "depth, calm wisdom and deep waters",
+    "completion and safe passage",
+]
+# Vimshottari dasha lord by nakshatra (the 9-planet cycle, repeated three times).
+_VIMSHOTTARI_CYCLE = ["Ketu", "Venus", "Sun", "Moon", "Mars", "Rahu", "Jupiter", "Saturn", "Mercury"]
+
+
+def vimshottari_lord(nakshatra_number: int) -> str:
+    """Ruling (dasha) planet for a nakshatra numbered 1..27."""
+    return _VIMSHOTTARI_CYCLE[(nakshatra_number - 1) % 9]
+
+
 # Nakshatra deity and symbol, index 0 = Ashwini .. 26 = Revati.
 NAKSHATRA_DEITY = [
     "Ashwini Kumaras", "Yama", "Agni", "Brahma (Prajapati)", "Soma (Chandra)", "Rudra",
@@ -88,3 +144,50 @@ MODALITY_MEANING = {
     "fixed": "steady and persistent, slow to change course",
     "dual": "adaptable, flexible and versatile",
 }
+
+_SIGNS = [
+    "Aries", "Taurus", "Gemini", "Cancer", "Leo", "Virgo",
+    "Libra", "Scorpio", "Sagittarius", "Capricorn", "Aquarius", "Pisces",
+]
+
+
+def _degree_label(total_degrees: float) -> str:
+    """Format a sidereal longitude as 'Sign dd°mm'' (e.g. 'Aries 13°20'')."""
+    total_degrees %= 360.0
+    sign = _SIGNS[int(total_degrees // 30)]
+    within = total_degrees % 30
+    degrees = int(within)
+    minutes = round((within - degrees) * 60)
+    if minutes == 60:  # rounding carry
+        degrees, minutes = degrees + 1, 0
+    return f"{sign} {degrees}°{minutes:02d}'"
+
+
+def nakshatra_catalog() -> list[dict]:
+    """The 27 nakshatras with their canonical attributes, for the reference atlas.
+
+    Deterministic and classical: names (North/Sanskrit + South/Tamil), symbol,
+    deity, ruling (Vimshottari) planet, gana, yoni, nadi, the short theme, and
+    the sidereal span (each nakshatra is 13°20'). No prediction.
+    """
+    span = 40.0 / 3.0  # 13 degrees 20 minutes
+    catalog = []
+    for index in range(27):
+        number = index + 1
+        catalog.append({
+            "number": number,
+            "name": NAKSHATRA_NAME[index],
+            "south_name": NAKSHATRA_SOUTH_NAME[index],
+            "symbol": NAKSHATRA_SYMBOL[index],
+            "deity": NAKSHATRA_DEITY[index],
+            "ruling_planet": vimshottari_lord(number),
+            "gana": gana_of(number),
+            "yoni": YONI_ANIMALS[YONI_INDEX[index]],
+            "nadi": nadi_of(number),
+            "theme": NAKSHATRA_THEME[index],
+            "span": {
+                "start": _degree_label(index * span),
+                "end": _degree_label(number * span),
+            },
+        })
+    return catalog
