@@ -282,6 +282,17 @@ def request_access(request: AccessRequestRequest) -> dict:
     }
 
 
+@app.get("/auth/access-status")
+def access_status(email: str = Query(..., min_length=3, max_length=320)) -> dict:
+    """Whether an email may register yet — so the UI can gate the form before it
+    is filled in. Reveals only invite status, never whether an account exists."""
+    normalized = email.strip().lower()
+    domains = _allowed_email_domains()
+    if domains and (normalized.rsplit("@", 1)[-1] if "@" in normalized else "") not in domains:
+        return {"email": normalized, "allowed": False, "reason": "domain"}
+    return {"email": normalized, "allowed": _signup_permitted(normalized), "reason": "invite"}
+
+
 @app.post("/auth/verify")
 def verify_email(request: VerifyEmailRequest) -> dict:
     """Confirm an email address from the link sent at registration."""

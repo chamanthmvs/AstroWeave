@@ -681,6 +681,17 @@ class PasswordResetTests(unittest.TestCase):
         # Now the same email may register.
         self.assertEqual(self._register("stranger@gmail.com").status_code, 200)
 
+    def test_access_status_reports_invite_and_domain(self):
+        # Not invited -> allowed false (invite reason); non-gmail -> domain reason.
+        unlisted = self.client.get("/auth/access-status", params={"email": "nobody@gmail.com"}).json()
+        self.assertEqual((unlisted["allowed"], unlisted["reason"]), (False, "invite"))
+        bad = self.client.get("/auth/access-status", params={"email": "nobody@outlook.com"}).json()
+        self.assertEqual((bad["allowed"], bad["reason"]), (False, "domain"))
+        admin = "astroweaveastrology@gmail.com"
+        with patch.dict("os.environ", {"ASTROWEAVE_ADMIN_EMAILS": admin}):
+            ok = self.client.get("/auth/access-status", params={"email": admin}).json()
+            self.assertTrue(ok["allowed"])
+
     def test_non_gmail_is_rejected_on_register_and_request_access(self):
         self.assertEqual(self._register("someone@outlook.com").status_code, 422)
         self.assertEqual(

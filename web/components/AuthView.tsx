@@ -11,28 +11,53 @@ type Mode = "signin" | "register" | "request";
 export default function AuthView() {
   const { signIn, register } = useAuth();
   const [mode, setMode] = useState<Mode>("signin");
+  const [step, setStep] = useState<"email" | "details">("email"); // register only
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [note, setNote] = useState("");
   const [birth, setBirth] = useState<BirthForm>(emptyBirth);
   const [error, setError] = useState("");
-  const [needsAccess, setNeedsAccess] = useState(false);
   const [done, setDone] = useState("");
   const [busy, setBusy] = useState(false);
 
   function switchMode(next: Mode) {
     setMode(next);
+    setStep("email");
     setError("");
     setDone("");
-    setNeedsAccess(false);
+  }
+
+  // Register step 1: only continue once we know this email is invited.
+  async function checkAccess(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
+    setBusy(true);
+    try {
+      const res = await api<{ allowed: boolean; reason: string }>(
+        `/auth/access-status?email=${encodeURIComponent(email.trim().toLowerCase())}`,
+        { auth: false },
+      );
+      if (res.allowed) {
+        setStep("details");
+      } else if (res.reason === "domain") {
+        setError("For now, only @gmail.com addresses are supported.");
+      } else {
+        setMode("request");
+        setDone("");
+        setError("That email isn't invited yet — you can request access below.");
+      }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Could not check that email.");
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     setError("");
     setDone("");
-    setNeedsAccess(false);
     setBusy(true);
     try {
       if (mode === "signin") {
@@ -63,8 +88,7 @@ export default function AuthView() {
       }
     } catch (err: unknown) {
       if (err instanceof ApiError && err.status === 403) {
-        // Not invited yet — offer the request-access path instead of a dead end.
-        setNeedsAccess(true);
+        setMode("request");
         setError(err.message);
       } else {
         setError(err instanceof Error ? err.message : "Something went wrong.");
@@ -88,23 +112,13 @@ export default function AuthView() {
           <h1 className="section-title" style={{ marginTop: 14 }}>
             Your questions, read from every angle.
           </h1>
-          <div className="usp">
-            <span className="pill"><b>Easy to understand</b></span>
-            <span className="pill"><b>Factual</b></span>
-            <span className="pill"><b>Honest</b></span>
-          </div>
+          <p className="dim" style={{ marginTop: 8 }}>Specialist Vedic &amp; KP astrology — clear, factual, honest.</p>
         </div>
 
         <div className="tabs" style={{ margin: "4px auto 8px" }}>
-          <button className="tab" aria-selected={mode === "signin"} onClick={() => switchMode("signin")}>
-            Sign in
-          </button>
-          <button className="tab" aria-selected={mode === "register"} onClick={() => switchMode("register")}>
-            Register
-          </button>
-          <button className="tab" aria-selected={mode === "request"} onClick={() => switchMode("request")}>
-            Request access
-          </button>
+          <button className="tab" aria-selected={mode === "signin"} onClick={() => switchMode("signin")}>Sign in</button>
+          <button className="tab" aria-selected={mode === "register"} onClick={() => switchMode("register")}>Register</button>
+          <button className="tab" aria-selected={mode === "request"} onClick={() => switchMode("request")}>Request access</button>
         </div>
 
         {done ? (
@@ -113,6 +127,21 @@ export default function AuthView() {
             <p className="dim">{done}</p>
             <button className="btn btn-ghost" onClick={() => switchMode("signin")}>Back to sign in</button>
           </div>
+        ) : mode === "register" && step === "email" ? (
+          // Step 1 — gate on access before showing the full form.
+          <form className="card card-glow" onSubmit={checkAccess}>
+            <label className="field">
+              <span>Email</span>
+              <input type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@gmail.com" required />
+              <span className="note" style={{ marginTop: 4 }}>Gmail addresses only, for now. We&apos;ll check your invite first.</span>
+            </label>
+            <button className="btn btn-primary btn-block" disabled={busy}>{busy ? "Checking…" : "Continue"}</button>
+            <p className="error">{error}</p>
+            <p className="note center" style={{ marginTop: 10 }}>
+              Don&apos;t have access yet?{" "}
+              <button type="button" className="btn-link" onClick={() => switchMode("request")}>Request an invite</button>
+            </p>
+          </form>
         ) : (
           <form className="card card-glow" onSubmit={submit}>
             {(mode === "register" || mode === "request") && (
@@ -131,8 +160,9 @@ export default function AuthView() {
                 onChange={(e) => setEmail(e.target.value)}
                 placeholder="you@gmail.com"
                 required
+                readOnly={mode === "register"}
               />
-              {mode !== "signin" && <span className="note" style={{ marginTop: 4 }}>Gmail addresses only, for now.</span>}
+              {mode === "request" && <span className="note" style={{ marginTop: 4 }}>Gmail addresses only, for now.</span>}
             </label>
 
             {mode === "signin" && (
@@ -148,9 +178,7 @@ export default function AuthView() {
                   <span>Password</span>
                   <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 8 characters" required />
                 </label>
-                <div className="eyebrow" style={{ margin: "6px 0 10px" }}>
-                  Birth details (fixed once, used for every reading)
-                </div>
+                <div className="eyebrow" style={{ margin: "6px 0 10px" }}>Birth details (fixed once, used for every reading)</div>
                 <BirthFields value={birth} onChange={setBirth} />
               </>
             )}
@@ -165,19 +193,7 @@ export default function AuthView() {
             <button className="btn btn-primary btn-block" style={{ marginTop: 8 }} disabled={busy}>
               {busy ? "…" : mode === "signin" ? "Continue" : mode === "request" ? "Request access" : "Create account"}
             </button>
-
             <p className="error">{error}</p>
-            {needsAccess && (
-              <button type="button" className="btn btn-ghost btn-block" onClick={() => switchMode("request")}>
-                Request access instead →
-              </button>
-            )}
-            {mode === "register" && !needsAccess && (
-              <p className="note center" style={{ marginTop: 10 }}>
-                Don&apos;t have access yet?{" "}
-                <button type="button" className="btn-link" onClick={() => switchMode("request")}>Request an invite</button>
-              </p>
-            )}
           </form>
         )}
       </div>
