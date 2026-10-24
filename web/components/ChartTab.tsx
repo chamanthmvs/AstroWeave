@@ -94,7 +94,7 @@ export default function ChartTab() {
               <div className="section-title">Moon sign</div>
               {extras.rasiKeynote && (
                 <p className="dim" style={{ marginTop: 8 }}>
-                  Your Moon sits in <b>{profile?.summary?.rasi}</b> — classically a {extras.rasiKeynote} sign.
+                  Your Moon sits in <b>{profile?.summary?.rasi}</b> — classically {extras.rasiKeynote}.
                 </p>
               )}
               <div className="nak-attrs" style={{ marginTop: 12 }}>
