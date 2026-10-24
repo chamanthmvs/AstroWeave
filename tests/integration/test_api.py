@@ -436,7 +436,7 @@ class ApiTests(unittest.TestCase):
                  patch("astroweave.graphs.orchestrator.orchestrator_graph.get_llm", return_value=orchestrator_llm), \
                  patch("astroweave.graphs.specialist.specialist_graph.get_llm", return_value=specialist_llm), \
                  patch("astroweave.orchestration.dispatcher.dispatcher.get_birth_chart", return_value={"d1": {}}) as chart, \
-                 patch.dict("os.environ", {"ASTROWEAVE_APP_ROUTES": '{"career-app":"career"}'}):
+                 patch.dict("os.environ", {"ASTROWEAVE_APP_ROUTES": '{"career-app":"career"}', "ASTROWEAVE_SIGNUP_MODE": "open"}):
                 registration = self.client.post("/auth/register", json={
                     "email": "demo-user", "name": "Demo", "password": "securepass123",
                     "birth_details": birth,
@@ -620,13 +620,14 @@ class PasswordResetTests(unittest.TestCase):
     def test_registration_user_starts_unverified_then_verifies(self):
         from astroweave.common.security import create_verification_token
 
-        registration = self.client.post("/auth/register", json={
-            "email": "new@example.com", "name": "New", "password": "securepass123",
-            "birth_details": {
-                "date": "1992-02-02", "time": "09:30:00", "place_name": "Mumbai",
-                "latitude": 19.07, "longitude": 72.88, "utc_offset_hours": 5.5, "date_known": True,
-            },
-        })
+        with patch.dict("os.environ", {"ASTROWEAVE_SIGNUP_MODE": "open"}):
+            registration = self.client.post("/auth/register", json={
+                "email": "new@example.com", "name": "New", "password": "securepass123",
+                "birth_details": {
+                    "date": "1992-02-02", "time": "09:30:00", "place_name": "Mumbai",
+                    "latitude": 19.07, "longitude": 72.88, "utc_offset_hours": 5.5, "date_known": True,
+                },
+            })
         self.assertEqual(registration.status_code, 200, registration.text)
         self.assertFalse(registration.json()["user"]["email_verified"])
         self.assertIn("email_verification", registration.json())
@@ -649,6 +650,49 @@ class PasswordResetTests(unittest.TestCase):
             )
         self.assertEqual(blocked.status_code, 403, blocked.text)
         self.assertEqual(blocked.json()["detail"]["code"], "email_unverified")
+
+    _BIRTH = {
+        "date": "1991-03-03", "time": "08:00:00", "place_name": "Delhi",
+        "latitude": 28.61, "longitude": 77.21, "utc_offset_hours": 5.5, "date_known": True,
+    }
+
+    def _register(self, email):
+        return self.client.post("/auth/register", json={
+            "email": email, "name": "X", "password": "securepass123", "birth_details": self._BIRTH,
+        })
+
+    def _admin_headers(self, email="astroweaveastrology@gmail.com"):
+        from astroweave.common.security import create_user_token
+        return {"Authorization": f"Bearer {create_user_token(email)}"}
+
+    def test_invite_only_blocks_strangers_and_allows_after_admin_grant(self):
+        # Default mode is invite: an unlisted email is refused.
+        self.assertEqual(self._register("stranger@example.com").status_code, 403)
+
+        admin = "astroweaveastrology@gmail.com"
+        with patch.dict("os.environ", {"ASTROWEAVE_ADMIN_EMAILS": admin}):
+            granted = self.client.post(
+                "/admin/allowlist", json={"email": "stranger@example.com"}, headers=self._admin_headers(admin),
+            )
+            self.assertEqual(granted.status_code, 200, granted.text)
+            listed = self.client.get("/admin/allowlist", headers=self._admin_headers(admin)).json()
+            self.assertIn("stranger@example.com", [row["email"] for row in listed["allowed"]])
+
+        # Now the same email may register.
+        self.assertEqual(self._register("stranger@example.com").status_code, 200)
+
+    def test_admin_email_can_always_register(self):
+        admin = "astroweaveastrology@gmail.com"
+        with patch.dict("os.environ", {"ASTROWEAVE_ADMIN_EMAILS": admin}):
+            self.assertEqual(self._register(admin).status_code, 200)
+
+    def test_allowlist_endpoints_require_admin(self):
+        with patch.dict("os.environ", {"ASTROWEAVE_ADMIN_EMAILS": "someone-else@astroweave.com"}):
+            self.assertEqual(
+                self.client.post("/admin/allowlist", json={"email": "x@example.com"}, headers=self._token()).status_code,
+                403,
+            )
+            self.assertEqual(self.client.get("/admin/allowlist", headers=self._token()).status_code, 403)
 
 
 if __name__ == "__main__":

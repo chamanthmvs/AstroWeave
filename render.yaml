@@ -55,7 +55,14 @@ services:
       - key: ASTROWEAVE_CHART_SERVICE_URL
         sync: false   # https://astroweave-chart.onrender.com (the chart service's URL)
       - key: ASTROWEAVE_ADMIN_EMAILS
-        sync: false   # your email, to reach /admin
+        sync: false   # e.g. astroweaveastrology@gmail.com — reaches /admin, manages the allowlist, always allowed to register
+      # Invite-only signup: only admins + allowlisted emails may register. Set
+      # to "open" to let anyone sign up.
+      - key: ASTROWEAVE_SIGNUP_MODE
+        value: invite
+      # Daily question cap per user (each reading costs real LLM spend). Default 2.
+      - key: ASTROWEAVE_RATE_LIMIT_PER_DAY
+        value: "2"
       - key: ASTROWEAVE_CORS_ORIGINS
         sync: false   # e.g. https://astroweave.vercel.app
       - key: ASTROWEAVE_CORS_ORIGIN_REGEX

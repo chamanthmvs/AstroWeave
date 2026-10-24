@@ -44,7 +44,7 @@ usage_daily = Table(
 )
 
 _GLOBAL_OWNER = "*"  # usernames are emails, so this can never collide with a real owner
-_DEFAULT_PER_USER_PER_DAY = 50
+_DEFAULT_PER_USER_PER_DAY = 2  # each reading costs us real LLM spend, so capacity is limited
 _DEFAULT_GLOBAL_PER_DAY = 0
 
 

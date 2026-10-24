@@ -85,4 +85,17 @@ so nobody is locked out).
 | `ASTROWEAVE_EMAIL_BACKEND` | `console`/`smtp` | email delivery mode |
 | `ASTROWEAVE_SMTP_*`, `ASTROWEAVE_EMAIL_FROM` | optional | SMTP settings |
 | `ASTROWEAVE_REQUIRE_EMAIL_VERIFICATION` | optional | gate `/run` on verified email |
-| `ASTROWEAVE_RATE_LIMIT_PER_DAY` | optional | per-user daily `/run` cap (default 50) |
+| `ASTROWEAVE_RATE_LIMIT_PER_DAY` | optional | per-user daily `/run` cap (default **2**) |
+| `ASTROWEAVE_SIGNUP_MODE` | optional | `invite` (default — admins + allowlisted only) or `open` |
+
+## Access control
+
+- **Invite-only signup** (default): only emails in `ASTROWEAVE_ADMIN_EMAILS` or on
+  the allowlist may register. An admin adds emails via `POST /admin/allowlist`
+  (`GET` to list, `DELETE /admin/allowlist/{email}` to revoke). Admin emails can
+  always register, which bootstraps the first account.
+- **Daily cap**: each user may run **2 questions/day** (readings cost real LLM
+  spend). Over the cap, `/run` returns `429` and the UI shows "Your quota is full".
+- **Admin dashboard**: `GET /admin/summary` (and the `/admin` page) show per-user
+  question counts, tokens and cost — never question text. Admins are the env
+  allowlist `ASTROWEAVE_ADMIN_EMAILS`, e.g. `astroweaveastrology@gmail.com`.

@@ -144,6 +144,10 @@ class VerifyEmailRequest(BaseModel):
     token: str
 
 
+class AllowlistRequest(BaseModel):
+    email: str
+
+
 _MIN_PASSWORD_LENGTH = 8
 
 
@@ -156,6 +160,22 @@ def _require_email_verification() -> bool:
         "yes",
         "on",
     }
+
+
+def _signup_mode() -> str:
+    """'invite' (default) = only allowlisted/admin emails may register; 'open' = anyone."""
+    return (os.environ.get("ASTROWEAVE_SIGNUP_MODE", "invite") or "invite").strip().lower()
+
+
+def _signup_permitted(email: str) -> bool:
+    """Invite-only by default: admins may always register (bootstrap), plus any
+    email an admin has added to the allowlist."""
+    if _signup_mode() == "open":
+        return True
+    if email in _admin_emails():
+        return True
+    with auth.get_connection() as connection:
+        return auth.is_signup_allowed(connection, email)
 
 
 def _send_verification_email(email: str) -> bool:
@@ -190,10 +210,16 @@ def sign_in(request: SignInRequest) -> dict:
 def register(request: RegisterRequest) -> dict:
     if len(request.password) < 8 or not request.name.strip():
         raise HTTPException(status_code=422, detail="Name and an 8-character password are required.")
+    email = request.email.strip().lower()
+    if not _signup_permitted(email):
+        raise HTTPException(
+            status_code=403,
+            detail="Signups are by invitation only. Please ask the AstroWeave team to grant your email access.",
+        )
     try:
         with auth.get_connection() as connection:
             user = auth.create_user(
-                connection, request.email.strip().lower(), request.name.strip(),
+                connection, email, request.name.strip(),
                 request.password, request.birth_details.model_dump(),
             )
     except (ValueError, KeyError) as error:
@@ -414,6 +440,33 @@ def admin_reset_token(request: RequestResetRequest, _admin: str = Depends(authen
     return {"email": email, "reset_token": token, "expires_in_seconds": 30 * 60}
 
 
+@app.get("/admin/allowlist")
+def admin_list_allowlist(_admin: str = Depends(authenticated_admin)) -> dict:
+    """Emails currently permitted to register (invite-only signup)."""
+    with auth.get_connection() as connection:
+        return {"allowed": auth.list_allowed_emails(connection), "signup_mode": _signup_mode()}
+
+
+@app.post("/admin/allowlist")
+def admin_add_allowlist(request: AllowlistRequest, admin: str = Depends(authenticated_admin)) -> dict:
+    """Grant an email permission to register."""
+    email = request.email.strip().lower()
+    if not email:
+        raise HTTPException(status_code=422, detail="An email is required.")
+    with auth.get_connection() as connection:
+        auth.add_allowed_email(connection, email, invited_by=admin)
+    return {"status": "ok", "email": email}
+
+
+@app.delete("/admin/allowlist/{email}")
+def admin_remove_allowlist(email: str, _admin: str = Depends(authenticated_admin)) -> dict:
+    """Revoke a pending invitation (does not affect already-registered users)."""
+    normalized = email.strip().lower()
+    with auth.get_connection() as connection:
+        removed = auth.remove_allowed_email(connection, normalized)
+    return {"status": "ok", "email": normalized, "removed": removed}
+
+
 def _request_fingerprint(request: RunRequest) -> str:
     canonical = request.model_dump(mode="json", exclude={"message_id", "username"})
     serialized = json.dumps(canonical, sort_keys=True, separators=(",", ":"))
@@ -593,9 +646,10 @@ def run(
             budget.scope, authenticated_user, budget.used, budget.limit,
         )
         message = (
-            "Daily request limit reached. Please try again tomorrow."
+            "Your daily quota is full. Each reading costs us real money to run, so "
+            "questions are limited per day — please come back tomorrow."
             if budget.scope == "user"
-            else "The service has reached its daily capacity. Please try again tomorrow."
+            else "AstroWeave has reached its daily capacity. Please try again tomorrow."
         )
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,

@@ -64,6 +64,15 @@ users = Table(
     Column("created_at", String, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
 )
 
+# Invitation allowlist: only emails here (or an admin email) may register.
+signup_allowlist = Table(
+    "signup_allowlist",
+    _metadata,
+    Column("email", String, primary_key=True),
+    Column("invited_by", String),
+    Column("created_at", String, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
+)
+
 
 def _resolve_engine(db_path: Path | None = None, engine: Engine | None = None) -> Engine:
     """Pick the engine for auth: explicit arg, else DATABASE_URL, else DB_PATH.
@@ -251,6 +260,46 @@ def get_password_hash(connection: Connection, email: str) -> str | None:
         text("SELECT password_hash FROM users WHERE email = :email"), {"email": email}
     ).scalar()
     return value if value is not None else None
+
+
+def is_signup_allowed(connection: Connection, email: str) -> bool:
+    """True if this email has been granted permission to register."""
+    row = connection.execute(
+        text("SELECT 1 FROM signup_allowlist WHERE email = :email"), {"email": email}
+    ).first()
+    return row is not None
+
+
+def add_allowed_email(connection: Connection, email: str, invited_by: str | None = None) -> None:
+    """Grant an email permission to register (idempotent)."""
+    connection.execute(
+        text(
+            """
+            INSERT INTO signup_allowlist (email, invited_by) VALUES (:email, :invited_by)
+            ON CONFLICT (email) DO NOTHING
+            """
+        ),
+        {"email": email, "invited_by": invited_by},
+    )
+    connection.commit()
+    logger.info("Signup allowed email=%s by=%s", email, invited_by)
+
+
+def list_allowed_emails(connection: Connection) -> list[dict[str, Any]]:
+    """All invited emails, newest first (for the admin dashboard)."""
+    rows = connection.execute(
+        text("SELECT email, invited_by, created_at FROM signup_allowlist ORDER BY created_at DESC")
+    ).mappings().all()
+    return [dict(row) for row in rows]
+
+
+def remove_allowed_email(connection: Connection, email: str) -> bool:
+    """Revoke a pending invitation. Returns False if it wasn't present."""
+    result = connection.execute(
+        text("DELETE FROM signup_allowlist WHERE email = :email"), {"email": email}
+    )
+    connection.commit()
+    return result.rowcount > 0
 
 
 def mark_email_verified(connection: Connection, email: str) -> bool:
