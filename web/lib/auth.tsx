@@ -14,6 +14,7 @@ type AuthContextValue = {
     email: string;
     name: string;
     password: string;
+    gender?: string;
     birth_details: BirthDetails;
   }) => Promise<AuthResult>;
   signOut: () => void;

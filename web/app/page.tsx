@@ -11,19 +11,19 @@ import AdminTab from "@/components/AdminTab";
 import ThemeToggle from "@/components/ThemeToggle";
 import QuotaBadge from "@/components/QuotaBadge";
 
-type TabKey = "ask" | "match" | "chart" | "atlas" | "admin";
+type TabKey = "chart" | "ask" | "match" | "atlas" | "admin";
 
 const TABS: { key: TabKey; label: string; icon: string; adminOnly?: boolean }[] = [
+  { key: "chart", label: "My Chart", icon: "◐" },
   { key: "ask", label: "Ask", icon: "✦" },
   { key: "match", label: "Kundli Matching", icon: "☍" },
-  { key: "chart", label: "My Chart", icon: "◐" },
-  { key: "atlas", label: "Star Atlas", icon: "✧" },
+  { key: "atlas", label: "Celestial Atlas", icon: "✧" },
   { key: "admin", label: "Admin", icon: "⚙", adminOnly: true },
 ];
 
 export default function Home() {
   const { user, loading, signOut } = useAuth();
-  const [tab, setTab] = useState<TabKey>("ask");
+  const [tab, setTab] = useState<TabKey>("chart");
 
   if (loading) {
     return (

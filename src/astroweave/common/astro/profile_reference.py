@@ -59,8 +59,79 @@ NAKSHATRA_THEME = [
     "depth, calm wisdom and deep waters",
     "completion and safe passage",
 ]
+# Classical meaning / translation of each nakshatra name, same index order.
+NAKSHATRA_MEANING = [
+    "the horse-woman; swift healers", "the bearer; she who carries", "the cutter; the flame",
+    "the red, growing one", "the deer's head; the search", "the moist one; the storm",
+    "the return of the light", "the nourisher", "the embrace; the coiled one",
+    "the mighty; the throne", "the former red one", "the latter red one", "the hand",
+    "the brilliant; the bright jewel", "the self-going; the sword", "the forked, two-branched",
+    "the follower of Radha", "the eldest", "the root", "the former invincible one",
+    "the latter invincible one", "the ear; listening", "the wealthiest; the drum",
+    "the hundred healers", "the former blessed feet", "the latter blessed feet",
+    "the prosperous one",
+]
+
 # Vimshottari dasha lord by nakshatra (the 9-planet cycle, repeated three times).
 _VIMSHOTTARI_CYCLE = ["Ketu", "Venus", "Sun", "Moon", "Mars", "Rahu", "Jupiter", "Saturn", "Mercury"]
+
+# The twelve rasis (zodiac signs) with standard classical attributes. Exaltation /
+# debilitation follow BPHS (e.g. Sun exalts in Aries, is debilitated in Libra).
+RASI = [
+    {"number": 1, "name": "Aries", "sanskrit": "Mesha", "symbol": "Ram", "lord": "Mars",
+     "element": "Fire", "modality": "Movable", "polarity": "Masculine",
+     "exalted": "Sun", "debilitated": "Saturn", "body_part": "Head",
+     "keynote": "pioneering, assertive and quick to begin"},
+    {"number": 2, "name": "Taurus", "sanskrit": "Vrishabha", "symbol": "Bull", "lord": "Venus",
+     "element": "Earth", "modality": "Fixed", "polarity": "Feminine",
+     "exalted": "Moon", "debilitated": None, "body_part": "Face and neck",
+     "keynote": "steady, sensual and resource-building"},
+    {"number": 3, "name": "Gemini", "sanskrit": "Mithuna", "symbol": "Twins", "lord": "Mercury",
+     "element": "Air", "modality": "Dual", "polarity": "Masculine",
+     "exalted": None, "debilitated": None, "body_part": "Shoulders and arms",
+     "keynote": "curious, communicative and versatile"},
+    {"number": 4, "name": "Cancer", "sanskrit": "Karka", "symbol": "Crab", "lord": "Moon",
+     "element": "Water", "modality": "Movable", "polarity": "Feminine",
+     "exalted": "Jupiter", "debilitated": "Mars", "body_part": "Chest and heart",
+     "keynote": "nurturing, protective and feeling"},
+    {"number": 5, "name": "Leo", "sanskrit": "Simha", "symbol": "Lion", "lord": "Sun",
+     "element": "Fire", "modality": "Fixed", "polarity": "Masculine",
+     "exalted": None, "debilitated": None, "body_part": "Stomach and upper abdomen",
+     "keynote": "confident, dignified and expressive"},
+    {"number": 6, "name": "Virgo", "sanskrit": "Kanya", "symbol": "Maiden", "lord": "Mercury",
+     "element": "Earth", "modality": "Dual", "polarity": "Feminine",
+     "exalted": "Mercury", "debilitated": "Venus", "body_part": "Waist and abdomen",
+     "keynote": "analytical, precise and service-minded"},
+    {"number": 7, "name": "Libra", "sanskrit": "Tula", "symbol": "Scales", "lord": "Venus",
+     "element": "Air", "modality": "Movable", "polarity": "Masculine",
+     "exalted": "Saturn", "debilitated": "Sun", "body_part": "Lower abdomen and kidneys",
+     "keynote": "balancing, relational and fair-minded"},
+    {"number": 8, "name": "Scorpio", "sanskrit": "Vrishchika", "symbol": "Scorpion", "lord": "Mars",
+     "element": "Water", "modality": "Fixed", "polarity": "Feminine",
+     "exalted": None, "debilitated": "Moon", "body_part": "Pelvis and genitals",
+     "keynote": "intense, probing and transformative"},
+    {"number": 9, "name": "Sagittarius", "sanskrit": "Dhanu", "symbol": "Archer", "lord": "Jupiter",
+     "element": "Fire", "modality": "Dual", "polarity": "Masculine",
+     "exalted": None, "debilitated": None, "body_part": "Hips and thighs",
+     "keynote": "philosophical, optimistic and seeking"},
+    {"number": 10, "name": "Capricorn", "sanskrit": "Makara", "symbol": "Sea-goat (crocodile)", "lord": "Saturn",
+     "element": "Earth", "modality": "Movable", "polarity": "Feminine",
+     "exalted": "Mars", "debilitated": "Jupiter", "body_part": "Knees",
+     "keynote": "disciplined, ambitious and enduring"},
+    {"number": 11, "name": "Aquarius", "sanskrit": "Kumbha", "symbol": "Water-bearer", "lord": "Saturn",
+     "element": "Air", "modality": "Fixed", "polarity": "Masculine",
+     "exalted": None, "debilitated": None, "body_part": "Calves and ankles",
+     "keynote": "independent, humanitarian and inventive"},
+    {"number": 12, "name": "Pisces", "sanskrit": "Meena", "symbol": "Fishes", "lord": "Jupiter",
+     "element": "Water", "modality": "Dual", "polarity": "Feminine",
+     "exalted": "Venus", "debilitated": "Mercury", "body_part": "Feet",
+     "keynote": "compassionate, imaginative and surrendering"},
+]
+
+
+def rasi_catalog() -> list[dict]:
+    """The twelve rasis with their canonical attributes (a copy, for the atlas)."""
+    return [dict(sign) for sign in RASI]
 
 
 def vimshottari_lord(nakshatra_number: int) -> str:
@@ -178,6 +249,7 @@ def nakshatra_catalog() -> list[dict]:
             "number": number,
             "name": NAKSHATRA_NAME[index],
             "south_name": NAKSHATRA_SOUTH_NAME[index],
+            "meaning": NAKSHATRA_MEANING[index],
             "symbol": NAKSHATRA_SYMBOL[index],
             "deity": NAKSHATRA_DEITY[index],
             "ruling_planet": vimshottari_lord(number),

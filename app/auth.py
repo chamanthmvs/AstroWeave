@@ -61,6 +61,7 @@ users = Table(
     Column("utc_offset_hours", Float, nullable=False),
     Column("date_known", Integer, nullable=False, server_default=text("1")),
     Column("email_verified", Integer, nullable=False, server_default=text("0")),
+    Column("gender", String),
     Column("created_at", String, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
 )
 
@@ -180,6 +181,9 @@ def init_db(engine: Engine) -> None:
             connection.execute(
                 text("ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0")
             )
+    if "gender" not in columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE users ADD COLUMN gender TEXT"))
 
 
 def _row_to_user(row: Any) -> dict[str, Any]:
@@ -187,6 +191,7 @@ def _row_to_user(row: Any) -> dict[str, Any]:
         "email": row["email"],
         "name": row["name"],
         "email_verified": bool(row["email_verified"]),
+        "gender": row["gender"],
         "birth_details": {
             "date": row["birth_date"],
             "time": row["birth_time"],
@@ -212,6 +217,7 @@ def create_user(
     name: str,
     password: str,
     birth_details: dict[str, Any],
+    gender: str | None = None,
 ) -> dict[str, Any]:
     """Register a new user with their birth details, captured once for good.
 
@@ -223,10 +229,10 @@ def create_user(
                 """
                 INSERT INTO users (
                     email, name, password_hash, birth_date, birth_time, birth_place,
-                    birth_latitude, birth_longitude, utc_offset_hours, date_known
+                    birth_latitude, birth_longitude, utc_offset_hours, date_known, gender
                 ) VALUES (
                     :email, :name, :password_hash, :birth_date, :birth_time, :birth_place,
-                    :birth_latitude, :birth_longitude, :utc_offset_hours, :date_known
+                    :birth_latitude, :birth_longitude, :utc_offset_hours, :date_known, :gender
                 )
                 """
             ),
@@ -241,6 +247,7 @@ def create_user(
                 "birth_longitude": birth_details["longitude"],
                 "utc_offset_hours": birth_details["utc_offset_hours"],
                 "date_known": 1 if birth_details.get("date_known", True) else 0,
+                "gender": (gender or "").strip().lower() or None,
             },
         )
         connection.commit()

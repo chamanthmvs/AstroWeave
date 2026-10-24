@@ -321,6 +321,10 @@ textarea { resize: vertical; min-height: 56px; }
 .center { text-align: center; }
 .stack > * + * { margin-top: 14px; }
 
+.koota-list { display: flex; flex-direction: column; margin-top: 10px; }
+.koota-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px 0; border-top: 1px solid var(--border); }
+.koota-name { font-weight: 600; }
+
 .quota-card { border-color: var(--border-strong); }
 .footnote { text-align: center; color: var(--muted); font-size: 0.78rem; margin-top: 40px; opacity: 0.85; }
 

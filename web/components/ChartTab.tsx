@@ -13,9 +13,12 @@ type Profile = {
   note?: string;
 };
 
+type Extras = { nakMeaning?: string; nakTheme?: string; rasiKeynote?: string };
+
 export default function ChartTab() {
   const [chart, setChart] = useState<ChartSummary | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [extras, setExtras] = useState<Extras>({});
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
@@ -23,10 +26,16 @@ export default function ChartTab() {
     Promise.all([
       api<ChartSummary>("/me/chart"),
       api<Profile>("/me/profile"),
+      api<{ nakshatras: { name: string; meaning: string; theme: string }[] }>("/nakshatras", { auth: false }),
+      api<{ rasis: { name: string; keynote: string }[] }>("/rasis", { auth: false }),
     ])
-      .then(([c, p]) => {
+      .then(([c, p, n, r]) => {
         setChart(c);
         setProfile(p);
+        const nakName = (p.summary?.nakshatra || "").split(" (")[0].trim();
+        const nak = n.nakshatras.find((x) => x.name === nakName);
+        const rasi = r.rasis.find((x) => x.name === p.summary?.rasi);
+        setExtras({ nakMeaning: nak?.meaning, nakTheme: nak?.theme, rasiKeynote: rasi?.keynote });
       })
       .catch((e) => setError(e.message))
       .finally(() => setLoading(false));
@@ -55,6 +64,13 @@ export default function ChartTab() {
       {profile?.nakshatra && (
         <div className="card">
           <div className="section-title">Birth star</div>
+          {(extras.nakMeaning || extras.nakTheme) && (
+            <p className="dim" style={{ marginTop: 8 }}>
+              {extras.nakMeaning && <em>{extras.nakMeaning}</em>}
+              {extras.nakMeaning && extras.nakTheme ? " — " : ""}
+              {extras.nakTheme}
+            </p>
+          )}
           <div className="nak-attrs" style={{ marginTop: 12 }}>
             {attrRows(profile.nakshatra, ["ruling_planet", "deity", "gana", "yoni", "nadi"])}
           </div>
@@ -66,6 +82,7 @@ export default function ChartTab() {
           {profile?.rasi && (
             <div className="card">
               <div className="section-title">Moon sign</div>
+              {extras.rasiKeynote && <p className="dim" style={{ marginTop: 8 }}>{extras.rasiKeynote}</p>}
               <div className="nak-attrs" style={{ marginTop: 12 }}>
                 {attrRows(profile.rasi, ["element", "modality", "varna"])}
               </div>

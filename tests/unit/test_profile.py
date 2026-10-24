@@ -2,7 +2,7 @@ import json
 import unittest
 from pathlib import Path
 
-from astroweave.common.astro import build_profile, nakshatra_catalog
+from astroweave.common.astro import build_profile, nakshatra_catalog, rasi_catalog
 from astroweave.common.astro.profile_reference import gana_of, nadi_of, vimshottari_lord
 
 _FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "chart_1990-01-01_chennai.json"
@@ -46,6 +46,32 @@ class NakshatraCatalogTests(unittest.TestCase):
         self.assertEqual(self.catalog[0]["span"]["start"], "Aries 0°00'")
         self.assertEqual(self.catalog[0]["span"]["end"], "Aries 13°20'")
         self.assertEqual(self.catalog[-1]["span"]["end"], "Aries 0°00'")  # 360 wraps to 0
+
+    def test_each_nakshatra_has_a_meaning(self):
+        self.assertTrue(all(n["meaning"] for n in self.catalog))
+        self.assertIn("horse", self.catalog[0]["meaning"])  # Ashwini
+
+
+class RasiCatalogTests(unittest.TestCase):
+    def setUp(self):
+        self.rasis = rasi_catalog()
+
+    def test_twelve_signs_in_order(self):
+        self.assertEqual(len(self.rasis), 12)
+        self.assertEqual([r["number"] for r in self.rasis], list(range(1, 13)))
+        self.assertEqual(self.rasis[0]["name"], "Aries")
+        self.assertEqual(self.rasis[0]["sanskrit"], "Mesha")
+
+    def test_lords_and_dignities_match_bphs(self):
+        by_name = {r["name"]: r for r in self.rasis}
+        self.assertEqual(by_name["Aries"]["lord"], "Mars")
+        self.assertEqual((by_name["Aries"]["exalted"], by_name["Aries"]["debilitated"]), ("Sun", "Saturn"))
+        self.assertEqual((by_name["Libra"]["exalted"], by_name["Libra"]["debilitated"]), ("Saturn", "Sun"))
+        self.assertEqual((by_name["Cancer"]["lord"], by_name["Cancer"]["exalted"]), ("Moon", "Jupiter"))
+        self.assertEqual(by_name["Pisces"]["lord"], "Jupiter")
+        # Elements and modalities form the expected 4x3 structure.
+        self.assertEqual({r["element"] for r in self.rasis}, {"Fire", "Earth", "Air", "Water"})
+        self.assertEqual({r["modality"] for r in self.rasis}, {"Movable", "Fixed", "Dual"})
 
 
 class BuildProfileTests(unittest.TestCase):

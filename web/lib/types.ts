@@ -13,6 +13,7 @@ export type User = {
   name: string;
   email_verified: boolean;
   is_admin?: boolean;
+  gender?: string | null;
   birth_details: BirthDetails;
 };
 
@@ -28,6 +29,7 @@ export type Nakshatra = {
   number: number;
   name: string;
   south_name: string;
+  meaning: string;
   symbol: string;
   deity: string;
   ruling_planet: string;

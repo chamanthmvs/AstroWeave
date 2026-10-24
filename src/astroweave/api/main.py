@@ -32,7 +32,7 @@ from astroweave.common.security import (
     verify_verification_token,
 )
 from astroweave.common.usage import UsageStore
-from astroweave.common.astro import build_chart_view, build_profile, nakshatra_catalog
+from astroweave.common.astro import build_chart_view, build_profile, nakshatra_catalog, rasi_catalog
 from astroweave.common.tools.chart_client import (
     ChartServiceUnavailable,
     get_birth_chart,
@@ -123,6 +123,7 @@ class RegistrationBirthDetails(BirthDetails):
 
 class RegisterRequest(SignInRequest):
     name: str
+    gender: str | None = None
     birth_details: RegistrationBirthDetails
 
 
@@ -251,6 +252,7 @@ def register(request: RegisterRequest) -> dict:
             user = auth.create_user(
                 connection, email, request.name.strip(),
                 request.password, request.birth_details.model_dump(),
+                gender=request.gender,
             )
     except (ValueError, KeyError) as error:
         raise HTTPException(status_code=422, detail=str(error)) from error
@@ -586,6 +588,15 @@ def nakshatras() -> dict[str, object]:
     gana, yoni, nadi, theme, sidereal span). Public: no auth, no chart needed.
     """
     return {"nakshatras": nakshatra_catalog()}
+
+
+@app.get("/rasis")
+def rasis() -> dict[str, object]:
+    """The 12 rasis (zodiac signs) with canonical attributes for the Celestial Atlas.
+
+    Deterministic classical reference (Sanskrit name, symbol, lord, element,
+    modality, polarity, exaltation/debilitation, body part). Public."""
+    return {"rasis": rasi_catalog()}
 
 
 @app.get("/geocode")

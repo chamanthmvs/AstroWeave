@@ -15,6 +15,7 @@ export default function AuthView() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
+  const [gender, setGender] = useState("female");
   const [note, setNote] = useState("");
   const [birth, setBirth] = useState<BirthForm>(emptyBirth);
   const [error, setError] = useState("");
@@ -75,6 +76,7 @@ export default function AuthView() {
           email: email.trim().toLowerCase(),
           name: name.trim(),
           password,
+          gender,
           birth_details: {
             date: birth.date,
             time: birth.time.length === 5 ? `${birth.time}:00` : birth.time,
@@ -174,10 +176,20 @@ export default function AuthView() {
 
             {mode === "register" && (
               <>
-                <label className="field">
-                  <span>Password</span>
-                  <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 8 characters" required />
-                </label>
+                <div className="row-2">
+                  <label className="field">
+                    <span>Password</span>
+                    <input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="At least 8 characters" required />
+                  </label>
+                  <label className="field">
+                    <span>Gender</span>
+                    <select value={gender} onChange={(e) => setGender(e.target.value)}>
+                      <option value="female">Female</option>
+                      <option value="male">Male</option>
+                      <option value="other">Prefer not to say</option>
+                    </select>
+                  </label>
+                </div>
                 <div className="eyebrow" style={{ margin: "6px 0 10px" }}>Birth details (fixed once, used for every reading)</div>
                 <BirthFields value={birth} onChange={setBirth} />
               </>
