@@ -28,7 +28,7 @@ from astroweave.common.security import (
     verify_user_token,
 )
 from astroweave.common.usage import UsageStore
-from astroweave.common.astro import build_chart_view
+from astroweave.common.astro import build_chart_view, build_profile
 from astroweave.common.tools.chart_client import (
     ChartServiceUnavailable,
     get_birth_chart,
@@ -233,6 +233,16 @@ def my_chart_summary(username: str = Depends(authenticated_username)) -> dict:
         "lagna_degree": summary.get("lagna_degree"),
         "sun_sign": summary.get("sun_sign"),
     }
+
+
+@app.get("/me/profile")
+def my_profile(username: str = Depends(authenticated_username)) -> dict:
+    """Deterministic classical profile (Nakshatra/Rasi/Lagna attributes) for the user."""
+    birth = _birth_for(username)
+    try:
+        return build_profile(get_birth_chart(**birth))
+    except ChartServiceUnavailable as error:
+        raise HTTPException(status_code=503, detail={"code": "chart_service_unavailable", "message": str(error)}) from error
 
 
 class MatchRequest(BaseModel):

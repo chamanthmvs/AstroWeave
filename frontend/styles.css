@@ -227,6 +227,10 @@ textarea { resize: vertical; min-height: 120px; line-height: 1.5; }
 .pair-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 1.2rem; }
 .pair-card { background: var(--surface-soft); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 0.8rem 1rem; }
 .pair-card h4 { margin: 0 0 0.5rem; font-size: 0.95rem; }
+.pair-grid-3 { grid-template-columns: repeat(3, 1fr); }
+.plain-list { margin: 0.4rem 0 1.2rem; padding-left: 1.1rem; }
+.plain-list li { margin: 0.4rem 0; line-height: 1.6; }
+@media (max-width: 860px) { .pair-grid-3 { grid-template-columns: 1fr; } }
 @media (max-width: 640px) { .pair-grid { grid-template-columns: 1fr; } .match-view { padding: 1.2rem 1rem 3rem; } }
 
 /* --- Auth screen ------------------------------------------------------- */

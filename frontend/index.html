@@ -136,6 +136,7 @@
       </div>
 
       <button class="btn-ghost" data-new-convo style="width:100%">＋ New conversation</button>
+      <button class="btn-ghost" data-open-profile style="width:100%">✦ Your profile</button>
       <button class="btn-ghost" data-open-match style="width:100%">☍ Kundli matching</button>
 
       <div class="section-label" style="margin:0">Recent</div>
@@ -235,6 +236,19 @@
           <div class="error-text" data-match-error></div>
         </form>
         <div data-match-result></div>
+      </section>
+
+      <!-- Deterministic profile -->
+      <section class="match-view hidden" data-profile-view>
+        <div class="match-head">
+          <button class="icon-btn" data-profile-back title="Back">←</button>
+          <div>
+            <div class="eyebrow">Your classical profile</div>
+            <h2>Rasi · Nakshatra · Lagna</h2>
+          </div>
+        </div>
+        <p class="intro">What your Moon sign, birth star and rising sign classically indicate — the facts first, then the same thing in plain language. Your full birth chart can soften or sharpen any of it.</p>
+        <div data-profile-result><p class="note">Loading…</p></div>
       </section>
     </main>
   </div>

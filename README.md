@@ -164,6 +164,14 @@ logged for the operator and an **admin** can mint one to hand over via
 password hash, so it stops working the moment the password changes. Wire an
 email sender later to deliver the token automatically.
 
+### Your profile (deterministic)
+
+`GET /me/profile` returns a fixed classical profile from the user's Moon Nakshatra
+(+ pada), Moon Rasi and Lagna: ruling planet, deity, symbol, gana, yoni, nadi,
+element, modality and varna, plus a plain-language summary a non-astrologer can
+read and a caveat that the full chart modulates these archetypes. Pure lookup, no
+LLM (`astroweave.common.astro.build_profile`); the UI has a 'Your profile' screen.
+
 ### Kundli matching (Guna Milan)
 
 `POST /match` computes marriage compatibility between the signed-in user and a

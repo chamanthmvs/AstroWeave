@@ -437,6 +437,28 @@
       "</div>";
   }
 
+  function renderProfile(p) {
+    if (!p || p.unavailable) {
+      $("[data-profile-result]").innerHTML = '<p class="note">' + esc((p && p.unavailable) || "Profile unavailable.") + "</p>";
+      return;
+    }
+    var n = p.nakshatra, r = p.rasi, l = p.lagna;
+    function fact(label, value) { return '<div class="chart-fact"><span>' + label + "</span><b>" + esc(value) + "</b></div>"; }
+    var cards =
+      '<div class="pair-card"><h4>Nakshatra · ' + esc(n.name) + " (pada " + esc(n.pada) + ")</h4>" +
+        fact("Ruling planet", n.ruling_planet) + fact("Deity", n.deity) + fact("Symbol", n.symbol) +
+        fact("Gana", n.gana) + fact("Yoni", n.yoni) + fact("Nadi", n.nadi) + "</div>" +
+      '<div class="pair-card"><h4>Rasi (Moon) · ' + esc(r.sign) + "</h4>" +
+        fact("Sign lord", r.lord) + fact("Element", r.element) + fact("Modality", r.modality) + fact("Varna", r.varna) + "</div>" +
+      '<div class="pair-card"><h4>Lagna (rising) · ' + esc(l.sign) + "</h4>" +
+        fact("Sign lord", l.lord) + fact("Element", l.element) + fact("Modality", l.modality) + "</div>";
+    var simple = (p.in_simple_terms || []).map(function (line) { return "<li>" + esc(line) + "</li>"; }).join("");
+    $("[data-profile-result]").innerHTML =
+      '<div class="match-result"><div class="pair-grid pair-grid-3">' + cards + "</div>" +
+      "<h3>In simple terms</h3><ul class=\"plain-list\">" + simple + "</ul>" +
+      '<p class="note">' + esc(p.note) + "</p></div>";
+  }
+
   function renderThread(messages) {
     var thread = $("[data-thread]");
     thread.innerHTML = "";
@@ -559,15 +581,26 @@
     $("[data-menu]").addEventListener("click", openNav);
     $("[data-scrim]").addEventListener("click", closeNav);
 
-    // Kundli matching view
+    // Switch the main area between chat, Kundli matching, and profile.
     function setMainMode(mode) {
-      var chat = mode !== "match";
-      ["[data-thread]", ".composer"].forEach(function (s) { var el = $(s); if (el) el.classList.toggle("hidden", !chat); });
-      $(".main-head").classList.toggle("hidden", !chat);
-      $("[data-match-view]").classList.toggle("hidden", chat);
+      var chat = mode === "chat";
+      ["[data-thread]", ".composer", ".main-head"].forEach(function (s) {
+        var el = $(s); if (el) el.classList.toggle("hidden", !chat);
+      });
+      $("[data-match-view]").classList.toggle("hidden", mode !== "match");
+      $("[data-profile-view]").classList.toggle("hidden", mode !== "profile");
     }
     $("[data-open-match]").addEventListener("click", function () { setMainMode("match"); closeNav(); });
     $("[data-match-back]").addEventListener("click", function () { setMainMode("chat"); });
+    $("[data-profile-back]").addEventListener("click", function () { setMainMode("chat"); });
+    $("[data-open-profile]").addEventListener("click", function () {
+      setMainMode("profile"); closeNav();
+      $("[data-profile-result]").innerHTML = '<p class="note">Loading…</p>';
+      api("/me/profile").then(renderProfile).catch(function (err) {
+        $("[data-profile-result]").innerHTML = '<p class="error-text">' +
+          (err.status === 503 ? "The chart service is unavailable — start it and try again." : esc(errorMessage(err))) + "</p>";
+      });
+    });
 
     var matchForm = $("[data-match-form]");
     var matchPartner = null;  // geocoded partner coords
