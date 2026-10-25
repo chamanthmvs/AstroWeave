@@ -1,7 +1,9 @@
 # AstroWeave web (Next.js)
 
-The redesigned frontend — a Next.js App Router app, dependency-light, dark
-"celestial minimal" theme with one vivid aqua accent. Four tabs:
+The redesigned frontend — a Next.js App Router app with an editorial celestial
+design system, refined serif/display typography, and coordinated ink, ivory,
+jade, and champagne colors. Dark mode is the default, with a soft dawn theme.
+Four tabs:
 
 - **Ask** — the multi-agent reading (`POST /run`)
 - **Kundli Matching** — North Guna Milan + South poruthams + Manglik (`POST /match`)
