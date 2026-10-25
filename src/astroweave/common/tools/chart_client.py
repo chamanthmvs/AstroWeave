@@ -10,6 +10,15 @@ logger = get_logger(__name__)
 
 CHART_SERVICE_URL = os.environ.get("ASTROWEAVE_CHART_SERVICE_URL", "http://127.0.0.1:8100")
 
+# Free hosts (e.g. Render free tier) sleep when idle and can take ~30-50s to wake
+# on the first request. Default generously so a cold chart service doesn't look
+# like an outage; override with ASTROWEAVE_CHART_TIMEOUT.
+def _default_timeout() -> float:
+    try:
+        return float(os.environ.get("ASTROWEAVE_CHART_TIMEOUT", "60"))
+    except ValueError:
+        return 60.0
+
 
 class ChartServiceUnavailable(RuntimeError):
     """Raised when the chart_service cannot be reached (down, unreachable, or
@@ -29,7 +38,7 @@ def get_birth_chart(
     include_dasha_bhukti: bool = True,
     include_bhava_chart: bool = True,
     include_ashtakavarga: bool = True,
-    timeout: float = 10.0,
+    timeout: float | None = None,
 ) -> dict[str, object]:
     """Fetch a birth chart from the isolated chart_service over HTTP.
 
@@ -54,14 +63,14 @@ def get_birth_chart(
         "include_ashtakavarga": include_ashtakavarga,
     }
     logger.info("Requesting chart from chart_service date=%s time=%s", date, time)
-    return _post("/chart", payload, timeout)
+    return _post("/chart", payload, timeout if timeout is not None else _default_timeout())
 
 
 def match_charts(
     person: dict,
     partner: dict,
     person_is_groom: bool = True,
-    timeout: float = 15.0,
+    timeout: float | None = None,
 ) -> dict[str, object]:
     """Kundli Milan for two births via chart_service /match.
 
@@ -71,7 +80,7 @@ def match_charts(
     """
     payload = {"person": person, "partner": partner, "person_is_groom": person_is_groom}
     logger.info("Requesting match from chart_service")
-    return _post("/match", payload, timeout)
+    return _post("/match", payload, timeout if timeout is not None else _default_timeout())
 
 
 def _post(path: str, payload: dict, timeout: float) -> dict[str, object]:

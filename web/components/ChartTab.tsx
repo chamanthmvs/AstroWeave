@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import type { ChartSummary } from "@/lib/types";
 
@@ -22,24 +22,32 @@ export default function ChartTab() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    Promise.all([
-      api<ChartSummary>("/me/chart"),
-      api<Profile>("/me/profile"),
-      api<{ nakshatras: { name: string; meaning: string; theme: string }[] }>("/nakshatras", { auth: false }),
-      api<{ rasis: { name: string; keynote: string }[] }>("/rasis", { auth: false }),
-    ])
-      .then(([c, p, n, r]) => {
-        setChart(c);
-        setProfile(p);
-        const nakName = (p.summary?.nakshatra || "").split(" (")[0].trim();
-        const nak = n.nakshatras.find((x) => x.name === nakName);
-        const rasi = r.rasis.find((x) => x.name === p.summary?.rasi);
-        setExtras({ nakMeaning: nak?.meaning, nakTheme: nak?.theme, rasiKeynote: rasi?.keynote });
-      })
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const [c, p, n, r] = await Promise.all([
+        api<ChartSummary>("/me/chart"),
+        api<Profile>("/me/profile"),
+        api<{ nakshatras: { name: string; meaning: string; theme: string }[] }>("/nakshatras", { auth: false }),
+        api<{ rasis: { name: string; keynote: string }[] }>("/rasis", { auth: false }),
+      ]);
+      setChart(c);
+      setProfile(p);
+      const nakName = (p.summary?.nakshatra || "").split(" (")[0].trim();
+      const nak = n.nakshatras.find((x) => x.name === nakName);
+      const rasi = r.rasis.find((x) => x.name === p.summary?.rasi);
+      setExtras({ nakMeaning: nak?.meaning, nakTheme: nak?.theme, rasiKeynote: rasi?.keynote });
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Could not load your chart.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const nakName = (profile?.summary?.nakshatra || "").split(" (")[0].trim();
 
@@ -51,8 +59,17 @@ export default function ChartTab() {
         <p>Your Moon sign, birth star and rising sign — the facts first, then the same thing in plain words.</p>
       </div>
 
-      {loading && <p className="muted center">Computing your chart…</p>}
-      {error && <p className="error">{error}</p>}
+      {loading && (
+        <p className="muted center">
+          Computing your chart… the free server can take up to a minute to wake on the first load.
+        </p>
+      )}
+      {error && !loading && (
+        <div className="card center stack">
+          <p className="dim">{error}</p>
+          <button className="btn btn-primary" onClick={load} style={{ margin: "0 auto" }}>Try again</button>
+        </div>
+      )}
 
       {chart && (
         <div className="facts">

@@ -58,15 +58,30 @@ export async function api<T = unknown>(
     if (token) headers["Authorization"] = `Bearer ${token}`;
   }
 
-  let response: Response;
-  try {
-    response = await fetch(`${BASE}${path}`, {
-      method,
-      headers,
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
-  } catch {
-    throw new ApiError("Can't reach the AstroWeave server. Is it running?", 0);
+  // Free hosting sleeps when idle, so the first request can fail or hang while
+  // the server wakes. Retry network-level failures a few times before giving up.
+  let response: Response | null = null;
+  const attempts = method === "GET" ? 4 : 2;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    try {
+      response = await fetch(`${BASE}${path}`, {
+        method,
+        headers,
+        body: body !== undefined ? JSON.stringify(body) : undefined,
+      });
+      break;
+    } catch {
+      if (attempt === attempts - 1) {
+        throw new ApiError(
+          "The server is waking up — our free hosting sleeps when idle. Please try again in a few seconds.",
+          0,
+        );
+      }
+      await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+    }
+  }
+  if (!response) {
+    throw new ApiError("The server is waking up. Please try again in a few seconds.", 0);
   }
 
   const text = await response.text();
