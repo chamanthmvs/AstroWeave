@@ -3,8 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import type { RunResponse } from "@/lib/types";
+import CostPanel, { usd } from "./CostPanel";
 
-type Msg = { role: "user" | "assistant"; content: string; trace?: string };
+type Msg = { role: "user" | "assistant"; content: string; trace?: string; cost?: number };
 type Quota = { used: number; limit: number | null; remaining: number | null };
 
 function uuid(): string {
@@ -68,6 +69,7 @@ export default function AskTab() {
           role: "assistant",
           content: res.answer || "No answer was produced.",
           trace: consulted.length ? `Consulted: ${consulted.join(", ")}` : undefined,
+          cost: res.cost_usd,
         },
       ]);
       loadQuota();
@@ -113,6 +115,9 @@ export default function AskTab() {
           <div key={i} className={`bubble ${m.role}`}>
             {m.content}
             {m.trace && <div className="trace">{m.trace}</div>}
+            {m.role === "assistant" && m.cost != null && m.cost > 0 && (
+              <div className="trace">This reading cost us ≈ {usd(m.cost)}</div>
+            )}
           </div>
         ))}
         {busy && <div className="bubble assistant">Reading your chart…</div>}
@@ -160,6 +165,10 @@ export default function AskTab() {
           </p>
         </>
       )}
+
+      <div style={{ marginTop: 26 }}>
+        <CostPanel />
+      </div>
 
       <p className="footnote">
         Every reading runs on an LLM that we pay for ourselves, so daily questions are limited — thanks for

@@ -104,6 +104,25 @@ class UsageStoreTests(unittest.TestCase):
         self.assertAlmostEqual(summary["by_day"][0]["cost_usd"], 26.0)
         self.assertEqual(summary["by_user"][0]["owner"], "b@x.com")  # $20 > $6, ranked first
 
+    def test_user_cost_summary_windows(self):
+        # Two runs today for one user.
+        self.store.record_run("a@x.com", "c", "m1",
+                              [{"model": "claude-opus-5-5", "input_tokens": 1_000_000, "output_tokens": 0, "cache_read_tokens": 0}])
+        self.store.record_run("a@x.com", "c", "m2",
+                              [{"model": "claude-sonnet-5-5", "input_tokens": 1_000_000, "output_tokens": 0, "cache_read_tokens": 0}])
+        summary = self.store.user_cost_summary("a@x.com")
+        self.assertEqual(summary["currency"], "USD")
+        self.assertTrue(summary["estimated"])
+        self.assertEqual(summary["today"]["runs"], 2)
+        self.assertAlmostEqual(summary["today"]["cost_usd"], 4.0 + 2.0)
+        self.assertEqual(summary["yesterday"]["runs"], 0)
+        # Windows include today, so they match today's totals here.
+        self.assertAlmostEqual(summary["last_7_days"]["cost_usd"], 6.0)
+        self.assertAlmostEqual(summary["total"]["cost_usd"], 6.0)
+        self.assertEqual(summary["total"]["runs"], 2)
+        # A different user sees nothing.
+        self.assertEqual(self.store.user_cost_summary("b@x.com")["total"], {"runs": 0, "cost_usd": 0.0})
+
     def test_totals_rank_users_by_cost(self):
         self.store.record_run("cheap@x.com", "c", "m1",
                               [{"model": "claude-sonnet-5-5", "input_tokens": 1000, "output_tokens": 1000, "cache_read_tokens": 0}])

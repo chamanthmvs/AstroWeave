@@ -470,6 +470,12 @@ def usage(username: str = Depends(authenticated_username)) -> dict:
     return _rate_limiter.usage_today(username)
 
 
+@app.get("/usage/cost")
+def usage_cost(username: str = Depends(authenticated_username)) -> dict:
+    """The signed-in user's own estimated LLM cost across several time windows."""
+    return _usage_store.user_cost_summary(username)
+
+
 def _admin_emails() -> set[str]:
     """Admins are operator-controlled via ASTROWEAVE_ADMIN_EMAILS (comma-separated),
     so there is no in-app way to grant admin and no default admin."""
@@ -728,6 +734,7 @@ def run(
                 "history_replayed": True,
             },
             "execution_trace": [],
+            "cost_usd": 0.0,
         }
 
     # Past the replay check this run will call the paid model, so it consumes a
@@ -784,8 +791,9 @@ def run(
             request_fingerprint=request_fingerprint, claim_token=request_claim_token,
         )
         # Record token usage/cost for this run; never let accounting fail the request.
+        run_cost = 0.0
         try:
-            _usage_store.record_run(
+            run_cost = _usage_store.record_run(
                 authenticated_user, conversation_id, request.message_id,
                 final_state.get("token_usage") or [],
             )
@@ -823,6 +831,7 @@ def run(
         "session_id": session_id,
         "state": final_state,
         "execution_trace": _execution_trace(final_state),
+        "cost_usd": round(float(run_cost or 0.0), 6),
     }
 
 

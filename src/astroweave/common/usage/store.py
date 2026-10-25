@@ -13,7 +13,7 @@ question or the answer.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -237,6 +237,57 @@ class UsageStore:
                 )
             ).mappings().all()]
         return {"overall": overall, "by_user": self.totals_by_user(top), "by_day": by_day, "by_model": by_model}
+
+    def user_cost_summary(self, owner: str) -> dict[str, Any]:
+        """One signed-in user's own cost across several windows (for transparency).
+
+        Summed from their usage_events; costs are estimates from the PRICING table.
+        Never exposes other users or any question text.
+        """
+        with self._engine.connect() as connection:
+            rows = connection.execute(
+                text(
+                    """
+                    SELECT day, COUNT(DISTINCT message_id) AS runs, SUM(cost_usd) AS cost
+                    FROM usage_events WHERE owner = :owner GROUP BY day
+                    """
+                ),
+                {"owner": owner},
+            ).mappings().all()
+        per_day = {r["day"]: (int(r["runs"] or 0), float(r["cost"] or 0.0)) for r in rows}
+        today = datetime.now(timezone.utc).date()
+
+        def exact(day: date) -> dict[str, Any]:
+            runs, cost = per_day.get(day.isoformat(), (0, 0.0))
+            return {"runs": runs, "cost_usd": round(cost, 6)}
+
+        def window(days: int) -> dict[str, Any]:
+            start = today - timedelta(days=days - 1)  # inclusive of today
+            runs = 0
+            cost = 0.0
+            for day_str, (day_runs, day_cost) in per_day.items():
+                try:
+                    if date.fromisoformat(day_str) >= start:
+                        runs += day_runs
+                        cost += day_cost
+                except ValueError:
+                    continue
+            return {"runs": runs, "cost_usd": round(cost, 6)}
+
+        return {
+            "currency": "USD",
+            "estimated": True,
+            "today": exact(today),
+            "yesterday": exact(today - timedelta(days=1)),
+            "last_3_days": window(3),
+            "last_7_days": window(7),
+            "last_14_days": window(14),
+            "last_30_days": window(30),
+            "total": {
+                "runs": sum(runs for runs, _ in per_day.values()),
+                "cost_usd": round(sum(cost for _, cost in per_day.values()), 6),
+            },
+        }
 
     def totals_by_user(self, limit: int = 100) -> list[dict[str, Any]]:
         """Per-user lifetime totals, most expensive first (for the admin dashboard)."""

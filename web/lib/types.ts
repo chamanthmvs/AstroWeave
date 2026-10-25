@@ -45,4 +45,18 @@ export type RunResponse = {
   conversation_id: string;
   session_id: string;
   execution_trace: { step: string; specialist?: string; specialists?: string[]; conclusion?: string }[];
+  cost_usd?: number;
+};
+
+export type CostWindow = { runs: number; cost_usd: number };
+export type CostSummary = {
+  currency: string;
+  estimated: boolean;
+  today: CostWindow;
+  yesterday: CostWindow;
+  last_3_days: CostWindow;
+  last_7_days: CostWindow;
+  last_14_days: CostWindow;
+  last_30_days: CostWindow;
+  total: CostWindow;
 };

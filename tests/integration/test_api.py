@@ -32,6 +32,7 @@ class ApiTests(unittest.TestCase):
         # Keep the real usage DB out of the tests.
         usage = patch("astroweave.api.main._usage_store")
         self.usage_store = usage.start()
+        self.usage_store.record_run.return_value = 0.0  # fed into round(float(...)) in /run
         self.addCleanup(usage.stop)
 
     def test_health(self):

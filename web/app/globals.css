@@ -420,6 +420,13 @@ textarea { resize: vertical; min-height: 56px; }
 .koota-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px 0; border-top: 1px solid var(--border); }
 .koota-name { font-weight: 600; }
 
+.cost-panel { }
+.cost-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px; }
+.cost-stat { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; }
+.cost-stat .k { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); }
+.cost-stat .v { font-family: var(--font-display); font-size: 1.3rem; margin-top: 3px; }
+.cost-stat .note { margin-top: 2px; }
+
 .quota-card { border-color: var(--border-strong); }
 .footnote { max-width: 64ch; text-align: center; color: var(--muted); font-size: 0.78rem; line-height: 1.7; margin: 36px auto 0; opacity: 0.85; }
 
