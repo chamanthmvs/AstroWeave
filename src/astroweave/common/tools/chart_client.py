@@ -91,8 +91,8 @@ def _post(path: str, payload: dict, timeout: float) -> dict[str, object]:
         # or unreachable. Distinct from a bad response, which we let through.
         logger.error("chart_service unreachable at %s: %s", CHART_SERVICE_URL, error)
         raise ChartServiceUnavailable(
-            f"The chart service at {CHART_SERVICE_URL} is unreachable. "
-            "Start it with: cd chart_service && uvicorn main:app --port 8100"
+            "The astrology engine is waking up (it sleeps when idle on free hosting). "
+            "Please try again in a few seconds."
         ) from error
     response.raise_for_status()
     return response.json()

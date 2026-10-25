@@ -7,17 +7,19 @@ import AskTab from "@/components/AskTab";
 import MatchTab from "@/components/MatchTab";
 import ChartTab from "@/components/ChartTab";
 import AtlasTab from "@/components/AtlasTab";
+import NumerologyTab from "@/components/NumerologyTab";
 import AdminTab from "@/components/AdminTab";
 import ThemeToggle from "@/components/ThemeToggle";
 import QuotaBadge from "@/components/QuotaBadge";
 import ChangePassword from "@/components/ChangePassword";
 
-type TabKey = "chart" | "ask" | "match" | "atlas" | "admin";
+type TabKey = "chart" | "ask" | "match" | "numerology" | "atlas" | "admin";
 
 const TABS: { key: TabKey; label: string; icon: string; adminOnly?: boolean }[] = [
   { key: "chart", label: "My Chart", icon: "◐" },
   { key: "ask", label: "Ask", icon: "✦" },
   { key: "match", label: "Kundli Matching", icon: "☍" },
+  { key: "numerology", label: "Numerology", icon: "№" },
   { key: "atlas", label: "Celestial Atlas", icon: "✧" },
   { key: "admin", label: "Admin", icon: "⚙", adminOnly: true },
 ];
@@ -74,6 +76,7 @@ export default function Home() {
         {tab === "ask" && <AskTab />}
         {tab === "match" && <MatchTab />}
         {tab === "chart" && <ChartTab />}
+        {tab === "numerology" && <NumerologyTab />}
         {tab === "atlas" && <AtlasTab />}
         {tab === "admin" && user.is_admin && <AdminTab />}
       </main>

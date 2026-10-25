@@ -30,6 +30,7 @@ from astroweave.common.security import (
 )
 from astroweave.common.usage import UsageStore
 from astroweave.common.astro import build_chart_view, build_profile, nakshatra_catalog, rasi_catalog
+from astroweave.common.numerology import build_numerology
 from astroweave.common.tools.chart_client import (
     ChartServiceUnavailable,
     get_birth_chart,
@@ -425,6 +426,20 @@ def my_chart_summary(username: str = Depends(authenticated_username)) -> dict:
         "lagna_degree": summary.get("lagna_degree"),
         "sun_sign": summary.get("sun_sign"),
     }
+
+
+@app.get("/me/numerology")
+def my_numerology(username: str = Depends(authenticated_username)) -> dict:
+    """Deterministic Pythagorean numerology from the user's name + birth date.
+
+    No chart service and no LLM, so it works instantly and for free — handy even
+    while the astrology engine is waking up."""
+    profile = _user_profile(username)
+    if profile is None:
+        raise HTTPException(status_code=401, detail="Account not found.")
+    name = profile.get("name") or ""
+    birth_date = profile.get("birth_details", {}).get("date", "")
+    return build_numerology(name, birth_date)
 
 
 @app.get("/me/profile")

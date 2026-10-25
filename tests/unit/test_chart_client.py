@@ -26,8 +26,10 @@ class ChartClientTests(unittest.TestCase):
         with self.assertRaises(ChartServiceUnavailable) as caught:
             get_birth_chart(**_BIRTH)
 
-        # The message should point the operator at the unreachable service.
-        self.assertIn(chart_client.CHART_SERVICE_URL, str(caught.exception))
+        # The message is user-friendly (no leaked dev command).
+        message = str(caught.exception)
+        self.assertIn("waking up", message)
+        self.assertNotIn("cd chart_service", message)
 
     @patch("astroweave.common.tools.chart_client.httpx.post")
     def test_bad_response_status_propagates_as_http_error(self, mock_post):
