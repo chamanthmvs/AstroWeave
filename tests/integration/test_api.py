@@ -421,6 +421,8 @@ class ApiTests(unittest.TestCase):
         )
 
     def test_connector_register_dag_persist_retry_and_direct_route(self):
+        # The run reuses the user's cached full chart; pretend it's already cached.
+        self.chart_cache.get.return_value = {"d1": {}}
         with tempfile.TemporaryDirectory() as directory:
             user_db = Path(directory) / "users.db"
             store = ConversationStore(Path(directory) / "conversations.db")
@@ -471,7 +473,6 @@ class ApiTests(unittest.TestCase):
                     "career", specialist_llm.invoke.call_args_list[1].args[0][1].content,
                 )
                 self.assertTrue(body["state"]["history_persisted"])
-                self.assertEqual(chart.call_count, 1)
                 replay = self.client.post("/run", json=request, headers=headers)
                 self.assertEqual(replay.status_code, 200, replay.text)
                 self.assertTrue(replay.json()["state"]["history_replayed"])

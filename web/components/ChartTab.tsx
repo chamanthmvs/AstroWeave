@@ -40,6 +40,8 @@ export default function ChartTab() {
       const nak = n.nakshatras.find((x) => x.name === nakName);
       const rasi = r.rasis.find((x) => x.name === p.summary?.rasi);
       setExtras({ nakMeaning: nak?.meaning, nakTheme: nak?.theme, rasiKeynote: rasi?.keynote });
+      // Warm the full chart in the background so "Load full chart" / Ask are ready.
+      api("/me/chart/full").catch(() => {});
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Could not load your chart.");
     } finally {

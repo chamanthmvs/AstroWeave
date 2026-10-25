@@ -32,13 +32,21 @@ export default function FullChart() {
     setLoading(true);
     setError("");
     try {
-      // First time computes the full chart (slow on free hosting); cached after.
-      setData(await api<FullChartData>("/me/chart/full", { timeoutMs: 120000 }));
+      // The full chart is computed in the background and cached. Poll until ready.
+      for (let i = 0; i < 48; i++) {
+        const res = await api<FullChartData & { status: string }>("/me/chart/full", { timeoutMs: 30000 });
+        if (res.status === "ready") {
+          setData(res);
+          setLoading(false);
+          return;
+        }
+        await new Promise((r) => setTimeout(r, 5000));
+      }
+      setError("Still preparing your chart — please try again in a moment.");
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Could not load the full chart.");
-    } finally {
-      setLoading(false);
     }
+    setLoading(false);
   }, []);
 
   useEffect(() => {

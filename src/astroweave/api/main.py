@@ -35,6 +35,7 @@ from astroweave.common.chartcache import ChartCache
 from astroweave.common.numerology import build_numerology
 from astroweave.common.tools.chart_client import (
     ChartServiceUnavailable,
+    full_chart_timeout,
     get_birth_chart,
     match_charts,
 )
@@ -448,9 +449,39 @@ def _cached_chart(owner: str, birth: dict, variant: str) -> dict:
     if cached is not None:
         return cached
     flags = _LIGHT_CHART if variant == "light" else {}
-    chart = get_birth_chart(**birth, **flags)
+    timeout = None if variant == "light" else full_chart_timeout()
+    chart = get_birth_chart(**birth, **flags, timeout=timeout)
     _chart_cache.put(owner, variant, birth_hash, chart)
     return chart
+
+
+# Background computation of the heavy full chart, so no user-facing request has to
+# wait out a ~1-2 minute free-tier compute. One job per user at a time; the result
+# is cached, so it is computed at most once per person.
+_full_chart_jobs: set[str] = set()
+_full_chart_jobs_lock = threading.Lock()
+
+
+def _compute_full_chart(owner: str, birth: dict) -> None:
+    try:
+        _cached_chart(owner, birth, "full")
+    except Exception:  # noqa: BLE001 - never crash the worker thread
+        logger.exception("background full-chart compute failed owner=%s", owner)
+    finally:
+        with _full_chart_jobs_lock:
+            _full_chart_jobs.discard(owner)
+
+
+def _full_chart_or_kickoff(owner: str, birth: dict) -> dict | None:
+    """Return the cached full chart, or None and start a background compute."""
+    cached = _chart_cache.get(owner, "full", _birth_hash(birth), _FULL_CHART_TTL_SECONDS)
+    if cached is not None:
+        return cached
+    with _full_chart_jobs_lock:
+        if owner not in _full_chart_jobs:
+            _full_chart_jobs.add(owner)
+            threading.Thread(target=_compute_full_chart, args=(owner, dict(birth)), daemon=True).start()
+    return None
 
 
 @app.get("/me/chart")
@@ -484,16 +515,17 @@ def _mahadasha_timeline(dasha_bhukti: list) -> list[dict]:
 
 @app.get("/me/chart/full")
 def my_chart_full(username: str = Depends(authenticated_username)) -> dict:
-    """The full computed chart (cached once per user): dashas, yogas, divisional
-    charts, shadbala, ashtakavarga. Powers the detailed view and warms the cache
-    for readings so Ask is fast afterwards."""
+    """The full computed chart (dashas, yogas, divisional charts, shadbala,
+    ashtakavarga), cached once per user. If it isn't ready yet it is computed in
+    the background and this returns {status: "computing"} so the UI can poll —
+    no user-facing request waits out the ~1-2 minute free-tier compute."""
     birth = _birth_for(username)
-    try:
-        chart = _cached_chart(username, birth, "full")
-    except ChartServiceUnavailable as error:
-        raise HTTPException(status_code=503, detail={"code": "chart_service_unavailable", "message": str(error)}) from error
+    chart = _full_chart_or_kickoff(username, birth)
+    if chart is None:
+        return {"status": "computing"}
     summary = build_chart_view(chart, "general", "both").get("summary", {})
     return {
+        "status": "ready",
         "summary": summary,
         "current_dasha": chart.get("current_dasha"),
         "mahadasha_timeline": _mahadasha_timeline(chart.get("dasha_bhukti") or []),
@@ -866,6 +898,21 @@ def run(
             "execution_trace": [],
             "cost_usd": 0.0,
         }
+
+    # The reading needs the full chart. Compute it in the background and, until it
+    # is ready, refuse *without* spending a question — so a first-time Ask never
+    # hangs or wastes quota. (My Chart warms this on landing, so it's usually ready.)
+    if profile.get("birth_details"):
+        light_birth = {key: value for key, value in profile["birth_details"].items() if key != "date_known"}
+        if _full_chart_or_kickoff(authenticated_user, light_birth) is None:
+            _conversation_store.release_request(request.message_id, request_claim_token)
+            raise HTTPException(
+                status_code=503,
+                detail={
+                    "code": "chart_preparing",
+                    "message": "Your birth chart is being prepared (a one-time step that takes about a minute). Please try again in a few seconds.",
+                },
+            )
 
     # Past the replay check this run will call the paid model, so it consumes a
     # daily budget slot. Over the cap, release the claim (so the same message_id
