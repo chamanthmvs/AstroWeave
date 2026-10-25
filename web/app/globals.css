@@ -1,42 +1,43 @@
 /* ============================================================
    AstroWeave — a night sky you can read by.
-   An editorial celestial workspace: midnight ink, warm ivory, and
-   restrained jade and champagne accents.
+   An editorial celestial workspace: midnight indigo, warm parchment,
+   antique gold, and restrained violet.
    ============================================================ */
 
 :root {
   /* Space palette (dark, default) */
-  --space-0: #0d1418;
-  --space-1: #121d21;
-  --violet-glow: rgba(175, 143, 92, 0.12);
-  --blue-glow: rgba(83, 147, 132, 0.13);
+  --space-0: #090b1d;
+  --space-1: #11152a;
+  --space-2: #070918;
+  --violet-glow: rgba(111, 93, 180, 0.18);
+  --blue-glow: rgba(82, 121, 194, 0.13);
 
-  --surface: rgba(23, 33, 37, 0.88);
-  --surface-2: rgba(29, 42, 45, 0.92);
-  --surface-3: rgba(38, 53, 55, 0.96);
-  --border: rgba(204, 211, 194, 0.12);
-  --border-strong: rgba(204, 211, 194, 0.22);
+  --surface: rgba(23, 24, 47, 0.9);
+  --surface-2: rgba(30, 31, 59, 0.94);
+  --surface-3: rgba(42, 42, 75, 0.98);
+  --border: rgba(196, 180, 236, 0.14);
+  --border-strong: rgba(196, 180, 236, 0.25);
   --glass-blur: 18px;
 
-  --text: #f1efe7;
-  --text-dim: #c4cbc2;
-  --muted: #98a59d;
+  --text: #f4f0e8;
+  --text-dim: #c9c4d8;
+  --muted: #a29cb8;
 
-  --accent: #9bcbb8;
-  --accent-2: #d3b783;
-  --accent-soft: rgba(155, 203, 184, 0.15);
-  --accent-ink: #13221d;
-  --star-cyan: #a7c5be;
+  --accent: #e3bd70;
+  --accent-2: #c1b2ed;
+  --accent-soft: rgba(227, 189, 112, 0.16);
+  --accent-ink: #241a0b;
+  --star-cyan: #c0b5e5;
 
-  --danger: #e8958c;
-  --ok: #9bcbb8;
+  --danger: #ed979b;
+  --ok: #a9c9ec;
 
   --star-opacity: 0.34;
   --nebula-opacity: 0.78;
 
   --radius: 20px;
   --radius-sm: 12px;
-  --shadow: 0 24px 70px -32px rgba(0, 0, 0, 0.62);
+  --shadow: 0 24px 70px -32px rgba(0, 0, 0, 0.66);
   --maxw: 1160px;
 
   --font: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -45,32 +46,33 @@
   color-scheme: dark;
 }
 
-/* Soft dawn — a legible light theme (the cosmos recedes, doesn't vanish). */
+/* Parchment — a warm, legible counterpart to the midnight sky. */
 :root[data-theme="light"] {
-  --space-0: #f5f2e9;
-  --space-1: #ece8dc;
-  --violet-glow: rgba(181, 145, 85, 0.12);
-  --blue-glow: rgba(77, 129, 113, 0.10);
+  --space-0: #f6f1e7;
+  --space-1: #eee7da;
+  --space-2: #eee8dc;
+  --violet-glow: rgba(161, 121, 59, 0.11);
+  --blue-glow: rgba(108, 91, 155, 0.11);
 
-  --surface: rgba(255, 254, 250, 0.88);
-  --surface-2: rgba(255, 254, 250, 0.96);
-  --surface-3: #eeeae0;
-  --border: rgba(55, 67, 57, 0.12);
-  --border-strong: rgba(55, 67, 57, 0.22);
+  --surface: rgba(255, 253, 248, 0.9);
+  --surface-2: rgba(255, 254, 250, 0.97);
+  --surface-3: #eee8dc;
+  --border: rgba(61, 48, 93, 0.13);
+  --border-strong: rgba(61, 48, 93, 0.24);
 
-  --text: #202b27;
-  --text-dim: #49564f;
-  --muted: #758078;
+  --text: #28223b;
+  --text-dim: #4f4963;
+  --muted: #777185;
 
-  --accent: #3f7966;
-  --accent-2: #9a7541;
-  --accent-soft: rgba(63, 121, 102, 0.12);
-  --accent-ink: #fffdf7;
-  --star-cyan: #3e7568;
-  --danger: #a64e46;
-  --ok: #36785e;
+  --accent: #7553a6;
+  --accent-2: #98703a;
+  --accent-soft: rgba(117, 83, 166, 0.13);
+  --accent-ink: #fffdf9;
+  --star-cyan: #66528d;
+  --danger: #a9444b;
+  --ok: #365d85;
 
-  --shadow: 0 24px 65px -34px rgba(46, 55, 43, 0.28);
+  --shadow: 0 24px 65px -34px rgba(55, 42, 78, 0.25);
 
   --star-opacity: 0.16;
   --nebula-opacity: 0.48;
@@ -105,9 +107,9 @@ body {
   background:
     radial-gradient(60% 50% at 78% 12%, var(--violet-glow), transparent 60%),
     radial-gradient(55% 45% at 12% 85%, var(--blue-glow), transparent 60%),
-    radial-gradient(45% 40% at 55% 50%, rgba(124, 148, 119, 0.08), transparent 65%),
-    linear-gradient(118deg, transparent 38%, rgba(205, 185, 143, 0.035) 50%, transparent 62%),
-    linear-gradient(180deg, var(--space-1) 0%, var(--space-0) 58%, #0a1012 100%);
+    radial-gradient(45% 40% at 55% 50%, rgba(112, 93, 157, 0.09), transparent 65%),
+    linear-gradient(118deg, transparent 38%, rgba(205, 185, 143, 0.04) 50%, transparent 62%),
+    linear-gradient(180deg, var(--space-1) 0%, var(--space-0) 58%, var(--space-2) 100%);
   filter: saturate(115%);
 }
 
@@ -154,13 +156,13 @@ body {
 .moon {
   position: absolute; top: 8%; right: 9%;
   width: 118px; height: 118px; border-radius: 50%;
-  background: radial-gradient(circle at 36% 33%, #fff5d9 0%, #e6d6b0 42%, #bda778 76%, #88794f 100%);
-  box-shadow: 0 0 70px -8px rgba(211, 183, 131, 0.28), inset -16px -12px 32px rgba(22, 27, 25, 0.48);
-  opacity: 0.3;
+  background: radial-gradient(circle at 36% 33%, #fff6df 0%, #ead39d 42%, #c5a45f 76%, #897041 100%);
+  box-shadow: 0 0 70px -8px rgba(227, 189, 112, 0.32), inset -16px -12px 32px rgba(13, 13, 35, 0.48);
+  opacity: 0.34;
   transform: translate3d(calc(var(--px, 0) * 17px), calc(var(--py, 0) * 17px), 0);
   transition: transform 0.35s ease-out;
 }
-:root[data-theme="light"] .moon { opacity: 0.22; }
+:root[data-theme="light"] .moon { opacity: 0.2; }
 
 /* subtle constellation */
 .constellation {
@@ -189,9 +191,9 @@ body {
 /* a soft vignette to settle the edges and focus the content */
 .starfield::after {
   content: ""; position: absolute; inset: 0; pointer-events: none;
-  background: radial-gradient(120% 90% at 50% 30%, transparent 55%, rgba(2, 1, 10, 0.55) 100%);
+  background: radial-gradient(120% 90% at 50% 30%, transparent 55%, rgba(3, 3, 18, 0.58) 100%);
 }
-:root[data-theme="light"] .starfield::after { background: radial-gradient(120% 90% at 50% 30%, transparent 60%, rgba(60, 50, 120, 0.12) 100%); }
+:root[data-theme="light"] .starfield::after { background: radial-gradient(120% 90% at 50% 30%, transparent 60%, rgba(71, 53, 91, 0.1) 100%); }
 
 @media (prefers-reduced-motion: reduce) { .stars-md, .stars-lg, .shooting { animation: none; } .shooting { display: none; } }
 

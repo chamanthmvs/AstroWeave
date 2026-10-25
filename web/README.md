@@ -1,8 +1,9 @@
 # AstroWeave web (Next.js)
 
 The redesigned frontend — a Next.js App Router app with an editorial celestial
-design system, refined serif/display typography, and coordinated ink, ivory,
-jade, and champagne colors. Dark mode is the default, with a soft dawn theme.
+design system, refined serif/display typography, and coordinated midnight
+indigo, parchment, antique gold, and violet colors. Dark mode is the default,
+with a warm parchment theme.
 Four tabs:
 
 - **Ask** — the multi-agent reading (`POST /run`)
