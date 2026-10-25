@@ -63,12 +63,13 @@ services:
       # Daily question cap per user (each reading costs real LLM spend). Default 2.
       - key: ASTROWEAVE_RATE_LIMIT_PER_DAY
         value: "2"
-      # Chart depth. "lite" is a FREE-TIER workaround: readings use a trimmed chart
-      # (D1 + key divisional charts + dashas + KP) because the full chart is too heavy
-      # for a 512 MB / shared-CPU instance, and the UI says so. On a paid tier (or
-      # locally) set this to "full" (or remove it) for the complete chart + accuracy.
-      - key: ASTROWEAVE_CHART_PROFILE
-        value: lite
+      # The chart-heavy AI features (Ask readings, the detailed full-chart view,
+      # the Kundli AI analysis) are DISABLED on the free tier — the 512 MB chart
+      # service can't compute full charts, and we never trim. The UI shows a
+      # "paused on free tier" banner. On a paid tier (or locally) set this to
+      # "true" (or remove it) and everything runs full, end to end.
+      - key: ASTROWEAVE_ENABLE_READINGS
+        value: "false"
       - key: ASTROWEAVE_CORS_ORIGINS
         sync: false   # e.g. https://astroweave.vercel.app
       - key: ASTROWEAVE_CORS_ORIGIN_REGEX

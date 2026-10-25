@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import type { ChartSummary } from "@/lib/types";
 import FullChart from "./FullChart";
 
@@ -23,6 +24,7 @@ export default function ChartTab() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [showFull, setShowFull] = useState(false);
+  const { readingsEnabled } = useAuth();
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -156,7 +158,9 @@ export default function ChartTab() {
             Dashas (planetary periods), yogas, divisional charts, planetary strengths and ashtakavarga — the
             deeper layers used for real readings. Computed once and saved.
           </p>
-          {!showFull ? (
+          {!readingsEnabled ? (
+            <p className="note">Available on the full version — the detailed chart is paused on the free tier.</p>
+          ) : !showFull ? (
             <button className="btn btn-primary" onClick={() => setShowFull(true)} style={{ margin: "0 auto" }}>
               Load full chart →
             </button>

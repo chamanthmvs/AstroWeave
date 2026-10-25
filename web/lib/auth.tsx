@@ -9,6 +9,8 @@ type AuthResult = { user: User; token: string; email_verification?: { sent: bool
 type AuthContextValue = {
   user: User | null;
   loading: boolean;
+  readingsEnabled: boolean;
+  readingsMessage: string | null;
   signIn: (email: string, password: string) => Promise<void>;
   register: (payload: {
     email: string;
@@ -26,6 +28,19 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [readingsEnabled, setReadingsEnabled] = useState(true);
+  const [readingsMessage, setReadingsMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    api<{ readings_enabled: boolean; readings_disabled_message: string | null }>("/config", { auth: false })
+      .then((c) => {
+        setReadingsEnabled(c.readings_enabled);
+        setReadingsMessage(c.readings_disabled_message);
+      })
+      .catch(() => {
+        /* default to enabled on failure */
+      });
+  }, []);
 
   const refresh = useCallback(async () => {
     try {
@@ -68,7 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, register, signOut, refresh }}>
+    <AuthContext.Provider value={{ user, loading, readingsEnabled, readingsMessage, signIn, register, signOut, refresh }}>
       {children}
     </AuthContext.Provider>
   );

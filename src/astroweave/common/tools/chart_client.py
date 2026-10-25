@@ -21,12 +21,13 @@ def _default_timeout() -> float:
 
 
 def full_chart_timeout() -> float:
-    """The full chart (all sections) is far heavier; allow much longer, since it
-    runs in a background job and is cached, not in a user-facing request."""
+    """The full/reading chart is far heavier (a trimmed one is ~200s on a free
+    shared CPU); allow generous time since it runs in a background job and is
+    cached, not in a user-facing request."""
     try:
-        return float(os.environ.get("ASTROWEAVE_FULL_CHART_TIMEOUT", "240"))
+        return float(os.environ.get("ASTROWEAVE_FULL_CHART_TIMEOUT", "320"))
     except ValueError:
-        return 240.0
+        return 320.0
 
 
 class ChartServiceUnavailable(RuntimeError):

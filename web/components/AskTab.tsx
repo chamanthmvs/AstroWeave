@@ -2,11 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api";
-import type { ChartScope, RunResponse } from "@/lib/types";
+import type { RunResponse } from "@/lib/types";
+import { useAuth } from "@/lib/auth";
 import CostPanel, { usd } from "./CostPanel";
-import ChartScopeNote from "./ChartScopeNote";
 
-type Msg = { role: "user" | "assistant"; content: string; trace?: string; cost?: number; scope?: ChartScope | null };
+type Msg = { role: "user" | "assistant"; content: string; trace?: string; cost?: number };
 type Quota = { used: number; limit: number | null; remaining: number | null };
 
 function uuid(): string {
@@ -15,6 +15,7 @@ function uuid(): string {
 }
 
 export default function AskTab() {
+  const { readingsEnabled, readingsMessage } = useAuth();
   const [messages, setMessages] = useState<Msg[]>([]);
   const [query, setQuery] = useState("");
   const [methodology, setMethodology] = useState("Let the system decide");
@@ -72,7 +73,6 @@ export default function AskTab() {
           content: res.answer || "No answer was produced.",
           trace: consulted.length ? `Consulted: ${consulted.join(", ")}` : undefined,
           cost: res.cost_usd,
-          scope: res.chart_scope,
         },
       ]);
       loadQuota();
@@ -91,6 +91,27 @@ export default function AskTab() {
 
   const remaining = quota?.remaining;
   const limit = quota?.limit;
+
+  if (!readingsEnabled) {
+    return (
+      <section>
+        <div className="hero">
+          <div className="eyebrow">Personal reading</div>
+          <h1>Readings are paused</h1>
+        </div>
+        <div className="card center" style={{ maxWidth: 620, margin: "0 auto" }}>
+          <p className="dim">
+            {readingsMessage ||
+              "AstroWeave is running on a free tier right now, so live readings are paused. We'll switch them back on soon."}
+          </p>
+          <p className="note" style={{ marginTop: 10 }}>
+            In the meantime, your <b>My Chart</b>, <b>Numerology</b>, <b>Celestial Atlas</b> and Kundli points are
+            all available.
+          </p>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section>
@@ -121,7 +142,6 @@ export default function AskTab() {
             {m.role === "assistant" && m.cost != null && m.cost > 0 && (
               <div className="trace">This reading cost us ≈ {usd(m.cost)}</div>
             )}
-            {m.role === "assistant" && m.scope && <ChartScopeNote scope={m.scope} />}
           </div>
         ))}
         {busy && <div className="bubble assistant">Reading your chart…</div>}

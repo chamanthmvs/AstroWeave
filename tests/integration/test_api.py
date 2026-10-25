@@ -279,6 +279,24 @@ class ApiTests(unittest.TestCase):
     def test_admin_summary_requires_a_token(self):
         self.assertEqual(self.client.get("/admin/summary").status_code, 401)
 
+    def test_config_reports_readings_flag(self):
+        with patch.dict("os.environ", {"ASTROWEAVE_ENABLE_READINGS": "false"}):
+            body = self.client.get("/config").json()
+        self.assertFalse(body["readings_enabled"])
+        self.assertIsInstance(body["readings_disabled_message"], str)
+
+    def test_run_disabled_on_free_tier(self):
+        with patch.dict("os.environ", {"ASTROWEAVE_ENABLE_READINGS": "false"}):
+            r = self.client.post("/run", json={"query": "hi", "message_id": "m-off"}, headers=self._headers())
+        self.assertEqual(r.status_code, 503)
+        self.assertEqual(r.json()["detail"]["code"], "readings_disabled")
+
+    def test_full_chart_disabled_on_free_tier(self):
+        with patch.dict("os.environ", {"ASTROWEAVE_ENABLE_READINGS": "false"}):
+            r = self.client.get("/me/chart/full", headers=self._headers())
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(r.json()["status"], "disabled")
+
     def test_ready_reports_chart_service(self):
         # Chart service isn't running in tests -> reachable key, value False.
         response = self.client.get("/ready")

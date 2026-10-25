@@ -435,45 +435,21 @@ _LIGHT_CHART = dict(
     include_kp=False,
 )
 
-# A trimmed "reading-grade" chart used ONLY on the free tier (ASTROWEAVE_CHART_PROFILE=lite),
-# because the full chart is too heavy for a 512 MB / shared-CPU host. It keeps the
-# backbone of a Vedic/KP reading (D1 + key divisional charts + dashas + KP) and drops
-# the heaviest layers. Locally and on paid tiers the profile is "full" (everything).
-_LITE_CHART = dict(
-    varga_factors=[9, 10, 7, 12],  # Navamsa + D10 (career/finance) + D7 (children) + D12 (family)
-    include_dasha_bhukti=True,
-    include_bhava_chart=True,
-    include_ashtakavarga=False,
-    include_shadbala=False,
-    include_yogas=False,
-    include_transits=False,
-    include_current_dasha=True,
-    include_kp=True,
-)
-_LITE_INCLUDED = ["D1 (rasi)", "Navamsa (D9)", "D10", "D7", "D12", "Vimshottari dashas", "current period", "KP sub-lords", "bhava chart"]
-_LITE_OMITTED = ["Shadbala (planetary strengths)", "Yogas", "Transits", "Ashtakavarga", "other divisional charts (D2/D3/D4/D24/D30/D60)"]
-
-
-def _chart_profile() -> str:
-    """'full' (default — local and paid tiers) or 'lite' (free-tier workaround)."""
-    return (os.environ.get("ASTROWEAVE_CHART_PROFILE") or "full").strip().lower()
-
-
-def _reading_flags() -> dict:
-    return _LITE_CHART if _chart_profile() == "lite" else {}
-
-
-def _chart_scope() -> dict | None:
-    """What the reading chart included/omitted — only set (and shown) on the lite tier."""
-    if _chart_profile() != "lite":
-        return None
-    return {
-        "tier": "lite",
-        "included": _LITE_INCLUDED,
-        "omitted": _LITE_OMITTED,
-        "note": "To stay within our free hosting, this used a lighter set of charts. The deeper layers above "
-                "weren't computed. On a paid tier the full chart is used, with everything included.",
+def _readings_enabled() -> bool:
+    """Whether the chart-heavy AI features (Ask + the full-chart view + Kundli AI)
+    are available. Disabled on the free tier — the free chart service can't compute
+    full charts — and re-enabled on local / paid tiers. No trimming: a reading uses
+    the complete chart or it is not offered."""
+    return (os.environ.get("ASTROWEAVE_ENABLE_READINGS", "true") or "true").strip().lower() in {
+        "1", "true", "yes", "on",
     }
+
+
+_READINGS_DISABLED_MESSAGE = (
+    "AstroWeave is running on a free tier right now, so live readings are paused. We cover all the "
+    "costs ourselves on a personal budget and will switch readings back on as soon as we can. "
+    "Meanwhile your chart summary, numerology, the atlas and Kundli points are all available."
+)
 
 
 def _birth_hash(birth: dict) -> str:
@@ -481,23 +457,19 @@ def _birth_hash(birth: dict) -> str:
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:32]
 
 
-def _full_cache_variant() -> str:
-    # Separate cache per tier, so switching free<->paid recomputes instead of serving stale depth.
-    return f"full:{_chart_profile()}"
-
-
 def _cached_chart(owner: str, birth: dict, variant: str) -> dict:
     """Return the user's chart, computing it via the chart service only on a cache
     miss. A birth chart is immutable, so the 'light' (D1) variant never expires;
-    the reading ('full') variant has a TTL because it includes time-relative sections."""
+    the full variant has a TTL because it includes time-relative sections. No
+    trimming — the full variant is the complete chart."""
     is_light = variant == "light"
-    cache_key = "light" if is_light else _full_cache_variant()
+    cache_key = "light" if is_light else "full"
     birth_hash = _birth_hash(birth)
     max_age = None if is_light else _FULL_CHART_TTL_SECONDS
     cached = _chart_cache.get(owner, cache_key, birth_hash, max_age)
     if cached is not None:
         return cached
-    flags = _LIGHT_CHART if is_light else _reading_flags()
+    flags = _LIGHT_CHART if is_light else {}
     timeout = None if is_light else full_chart_timeout()
     chart = get_birth_chart(**birth, **flags, timeout=timeout)
     _chart_cache.put(owner, cache_key, birth_hash, chart)
@@ -528,7 +500,7 @@ def _full_chart_or_kickoff(owner: str, birth: dict) -> dict | None:
 
     A cooldown stops a repeatedly-failing compute (e.g. the chart is too heavy for
     the host) from re-kicking on every poll and jamming the chart service."""
-    cached = _chart_cache.get(owner, _full_cache_variant(), _birth_hash(birth), _FULL_CHART_TTL_SECONDS)
+    cached = _chart_cache.get(owner, "full", _birth_hash(birth), _FULL_CHART_TTL_SECONDS)
     if cached is not None:
         return cached
     now = time.time()
@@ -577,6 +549,8 @@ def my_chart_full(username: str = Depends(authenticated_username)) -> dict:
     ashtakavarga), cached once per user. If it isn't ready yet it is computed in
     the background and this returns {status: "computing"} so the UI can poll —
     no user-facing request waits out the ~1-2 minute free-tier compute."""
+    if not _readings_enabled():
+        return {"status": "disabled", "message": _READINGS_DISABLED_MESSAGE}
     birth = _birth_for(username)
     chart = _full_chart_or_kickoff(username, birth)
     if chart is None:
@@ -584,7 +558,6 @@ def my_chart_full(username: str = Depends(authenticated_username)) -> dict:
     summary = build_chart_view(chart, "general", "both").get("summary", {})
     return {
         "status": "ready",
-        "chart_scope": _chart_scope(),
         "summary": summary,
         "current_dasha": chart.get("current_dasha"),
         "mahadasha_timeline": _mahadasha_timeline(chart.get("dasha_bhukti") or []),
@@ -765,6 +738,15 @@ def health() -> dict[str, str]:
     return {"status": "ok", "service": "astroweave-api"}
 
 
+@app.get("/config")
+def config() -> dict:
+    """Public feature flags the frontend uses to show/hide heavy AI features."""
+    return {
+        "readings_enabled": _readings_enabled(),
+        "readings_disabled_message": None if _readings_enabled() else _READINGS_DISABLED_MESSAGE,
+    }
+
+
 _chart_waking = threading.Event()  # true while a background wake request is in flight
 
 
@@ -884,6 +866,11 @@ def run(
     request: RunRequest,
     authenticated_user: str = Depends(authenticated_username),
 ) -> dict[str, object]:
+    if not _readings_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"code": "readings_disabled", "message": _READINGS_DISABLED_MESSAGE},
+        )
     if request.username is not None and request.username != authenticated_user:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -1072,7 +1059,6 @@ def run(
         "state": final_state,
         "execution_trace": _execution_trace(final_state),
         "cost_usd": round(float(run_cost or 0.0), 6),
-        "chart_scope": _chart_scope(),
     }
 
 

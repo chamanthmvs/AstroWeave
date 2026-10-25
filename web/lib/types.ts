@@ -40,15 +40,12 @@ export type Nakshatra = {
   span: { start: string; end: string };
 };
 
-export type ChartScope = { tier: string; included: string[]; omitted: string[]; note: string };
-
 export type RunResponse = {
   answer: string;
   conversation_id: string;
   session_id: string;
   execution_trace: { step: string; specialist?: string; specialists?: string[]; conclusion?: string }[];
   cost_usd?: number;
-  chart_scope?: ChartScope | null;
 };
 
 export type CostWindow = { runs: number; cost_usd: number };

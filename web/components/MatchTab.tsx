@@ -194,6 +194,10 @@ export default function MatchTab() {
             These scores are a classical screening from the Moon nakshatras alone. A full reading weighs the
             whole chart — dashas, doshas and the 7th house — so treat this as guidance, not a final answer.
           </p>
+          <p className="note center" style={{ marginTop: 6 }}>
+            A detailed AI compatibility reading — temperament, family, health, finances and married-life
+            indications from the full charts — is available on the full version.
+          </p>
         </>
       )}
     </section>
