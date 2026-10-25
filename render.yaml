@@ -3,7 +3,7 @@
 # What this provisions, with no manual database creation:
 #   - astroweave-db     : a free Postgres instance (DATABASE_URL is injected into
 #                          the API automatically — see envVars below)
-#   - astroweave-api    : the backend + its static SPA (FastAPI)
+#   - astroweave-api    : the backend API (FastAPI; the UI is the Vercel app)
 #   - astroweave-chart  : the isolated PyJHora chart service (own process/deps)
 #
 # To deploy: push this repo to GitHub, then on Render choose
@@ -25,7 +25,7 @@ databases:
     user: astroweave
 
 services:
-  # ---- Backend API + SPA ---------------------------------------------------
+  # ---- Backend API ---------------------------------------------------------
   - type: web
     name: astroweave-api
     runtime: python
