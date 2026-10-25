@@ -34,6 +34,11 @@ class ApiTests(unittest.TestCase):
         self.usage_store = usage.start()
         self.usage_store.record_run.return_value = 0.0  # fed into round(float(...)) in /run
         self.addCleanup(usage.stop)
+        # Isolate the per-user chart cache so tests always "miss" and don't touch the real DB.
+        cache = patch("astroweave.api.main._chart_cache")
+        self.chart_cache = cache.start()
+        self.chart_cache.get.return_value = None
+        self.addCleanup(cache.stop)
 
     def test_health(self):
         response = self.client.get("/health")
@@ -444,7 +449,7 @@ class ApiTests(unittest.TestCase):
                  patch("astroweave.api.main._user_profile", side_effect=lambda username: self._real_profile(username)), \
                  patch("astroweave.graphs.orchestrator.orchestrator_graph.get_llm", return_value=orchestrator_llm), \
                  patch("astroweave.graphs.specialist.specialist_graph.get_llm", return_value=specialist_llm), \
-                 patch("astroweave.orchestration.dispatcher.dispatcher.get_birth_chart", return_value={"d1": {}}) as chart, \
+                 patch("astroweave.api.main.get_birth_chart", return_value={"d1": {}}) as chart, \
                  patch.dict("os.environ", {"ASTROWEAVE_APP_ROUTES": '{"career-app":"career"}', "ASTROWEAVE_SIGNUP_MODE": "open", "ASTROWEAVE_ALLOWED_EMAIL_DOMAINS": ""}):
                 registration = self.client.post("/auth/register", json={
                     "email": "demo-user", "name": "Demo", "password": "securepass123",

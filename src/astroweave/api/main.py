@@ -31,6 +31,7 @@ from astroweave.common.security import (
 )
 from astroweave.common.usage import UsageStore
 from astroweave.common.astro import build_chart_view, build_profile, nakshatra_catalog, rasi_catalog
+from astroweave.common.chartcache import ChartCache
 from astroweave.common.numerology import build_numerology
 from astroweave.common.tools.chart_client import (
     ChartServiceUnavailable,
@@ -85,6 +86,9 @@ _orchestrator_graph = build_orchestrator_graph()
 _conversation_store = ConversationStore()
 _rate_limiter = RateLimiter()
 _usage_store = UsageStore()
+_chart_cache = ChartCache()
+
+_FULL_CHART_TTL_SECONDS = 24 * 60 * 60  # time-relative sections (transits, current dasha) stay fresh-ish
 
 
 class BirthDetails(BaseModel):
@@ -429,12 +433,32 @@ _LIGHT_CHART = dict(
 )
 
 
+def _birth_hash(birth: dict) -> str:
+    canonical = json.dumps(birth, sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:32]
+
+
+def _cached_chart(owner: str, birth: dict, variant: str) -> dict:
+    """Return the user's chart, computing it via the chart service only on a cache
+    miss. A birth chart is immutable, so the 'light' (D1) variant never expires;
+    the 'full' variant has a TTL because it includes time-relative sections."""
+    birth_hash = _birth_hash(birth)
+    max_age = None if variant == "light" else _FULL_CHART_TTL_SECONDS
+    cached = _chart_cache.get(owner, variant, birth_hash, max_age)
+    if cached is not None:
+        return cached
+    flags = _LIGHT_CHART if variant == "light" else {}
+    chart = get_birth_chart(**birth, **flags)
+    _chart_cache.put(owner, variant, birth_hash, chart)
+    return chart
+
+
 @app.get("/me/chart")
 def my_chart_summary(username: str = Depends(authenticated_username)) -> dict:
     """The signed-in user's Rasi (Moon sign), Nakshatra, and Lagna for the side panel."""
     birth = _birth_for(username)
     try:
-        summary = build_chart_view(get_birth_chart(**birth, **_LIGHT_CHART), "general", "both").get("summary", {})
+        summary = build_chart_view(_cached_chart(username, birth, "light"), "general", "both").get("summary", {})
     except ChartServiceUnavailable as error:
         raise HTTPException(status_code=503, detail={"code": "chart_service_unavailable", "message": str(error)}) from error
     return {
@@ -443,6 +467,40 @@ def my_chart_summary(username: str = Depends(authenticated_username)) -> dict:
         "lagna": summary.get("lagna"),
         "lagna_degree": summary.get("lagna_degree"),
         "sun_sign": summary.get("sun_sign"),
+    }
+
+
+def _mahadasha_timeline(dasha_bhukti: list) -> list[dict]:
+    """Collapse the bhukti list into the 9 Vimshottari mahadasha periods with dates."""
+    periods: list[dict] = []
+    for row in dasha_bhukti or []:
+        lord = row.get("maha_lord")
+        if not periods or periods[-1]["lord"] != lord:
+            if periods:
+                periods[-1]["end_date"] = row.get("start_date")
+            periods.append({"lord": lord, "start_date": row.get("start_date"), "end_date": None})
+    return periods
+
+
+@app.get("/me/chart/full")
+def my_chart_full(username: str = Depends(authenticated_username)) -> dict:
+    """The full computed chart (cached once per user): dashas, yogas, divisional
+    charts, shadbala, ashtakavarga. Powers the detailed view and warms the cache
+    for readings so Ask is fast afterwards."""
+    birth = _birth_for(username)
+    try:
+        chart = _cached_chart(username, birth, "full")
+    except ChartServiceUnavailable as error:
+        raise HTTPException(status_code=503, detail={"code": "chart_service_unavailable", "message": str(error)}) from error
+    summary = build_chart_view(chart, "general", "both").get("summary", {})
+    return {
+        "summary": summary,
+        "current_dasha": chart.get("current_dasha"),
+        "mahadasha_timeline": _mahadasha_timeline(chart.get("dasha_bhukti") or []),
+        "yogas": chart.get("yogas") or [],
+        "divisional_charts": chart.get("divisional_charts") or {},
+        "shadbala": chart.get("shadbala") or {},
+        "ashtakavarga": chart.get("ashtakavarga") or {},
     }
 
 
@@ -465,7 +523,7 @@ def my_profile(username: str = Depends(authenticated_username)) -> dict:
     """Deterministic classical profile (Nakshatra/Rasi/Lagna attributes) for the user."""
     birth = _birth_for(username)
     try:
-        return build_profile(get_birth_chart(**birth, **_LIGHT_CHART))
+        return build_profile(_cached_chart(username, birth, "light"))
     except ChartServiceUnavailable as error:
         raise HTTPException(status_code=503, detail={"code": "chart_service_unavailable", "message": str(error)}) from error
 
@@ -843,9 +901,13 @@ def run(
             conversation_id=conversation_id, session_id=session_id, owner=authenticated_user,
         )
         birth_details = profile["birth_details"]
+        initial_state: dict = {"user_query": request.query, "messages": conversation_history + session_history}
         if birth_details:
-            context["birth_details"] = {key: value for key, value in birth_details.items() if key != "date_known"}
-        initial_state = {"user_query": request.query, "messages": conversation_history + session_history}
+            light_birth = {key: value for key, value in birth_details.items() if key != "date_known"}
+            context["birth_details"] = light_birth
+            # Reuse the user's cached full chart (computed once) so the orchestrator
+            # doesn't recompute it — the dispatcher uses state["chart_data"] if present.
+            initial_state["chart_data"] = _cached_chart(authenticated_user, light_birth, "full")
         if specialist is None:
             final_state = _orchestrator_graph.invoke(initial_state, context=context)
         else:

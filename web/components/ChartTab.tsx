@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import type { ChartSummary } from "@/lib/types";
+import FullChart from "./FullChart";
 
 type Profile = {
   summary?: { rasi?: string; nakshatra?: string; lagna?: string };
@@ -21,6 +22,7 @@ export default function ChartTab() {
   const [extras, setExtras] = useState<Extras>({});
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [showFull, setShowFull] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -144,6 +146,23 @@ export default function ChartTab() {
       )}
 
       {profile?.note && <p className="note center">{profile.note}</p>}
+
+      {chart && (
+        <div className="card center" style={{ marginTop: 10 }}>
+          <div className="section-title">Full chart &amp; detailed analysis</div>
+          <p className="dim" style={{ margin: "8px 0 14px" }}>
+            Dashas (planetary periods), yogas, divisional charts, planetary strengths and ashtakavarga — the
+            deeper layers used for real readings. Computed once and saved.
+          </p>
+          {!showFull ? (
+            <button className="btn btn-primary" onClick={() => setShowFull(true)} style={{ margin: "0 auto" }}>
+              Load full chart →
+            </button>
+          ) : (
+            <FullChart />
+          )}
+        </div>
+      )}
     </section>
   );
 }
