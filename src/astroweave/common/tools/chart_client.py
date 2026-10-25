@@ -113,5 +113,13 @@ def _post(path: str, payload: dict, timeout: float) -> dict[str, object]:
             "The astrology engine is waking up (it sleeps when idle on free hosting). "
             "Please try again in a few seconds."
         ) from error
+    # A 5xx from the router means the service is busy, restarting, or crashed
+    # (e.g. out of memory mid-compute) — treat it like being unavailable, not a
+    # 500 to the user. 4xx (a genuine bad request) still surfaces normally.
+    if response.status_code >= 500:
+        logger.error("chart_service returned %s at %s", response.status_code, CHART_SERVICE_URL)
+        raise ChartServiceUnavailable(
+            "The astrology engine is busy or restarting. Please try again in a moment."
+        )
     response.raise_for_status()
     return response.json()

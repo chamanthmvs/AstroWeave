@@ -2,6 +2,7 @@ import hashlib
 import json
 import os
 import threading
+import time
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
@@ -459,7 +460,9 @@ def _cached_chart(owner: str, birth: dict, variant: str) -> dict:
 # wait out a ~1-2 minute free-tier compute. One job per user at a time; the result
 # is cached, so it is computed at most once per person.
 _full_chart_jobs: set[str] = set()
+_full_chart_last_kick: dict[str, float] = {}
 _full_chart_jobs_lock = threading.Lock()
+_FULL_CHART_COOLDOWN = 120  # don't re-attempt a failing compute more often than this
 
 
 def _compute_full_chart(owner: str, birth: dict) -> None:
@@ -473,13 +476,20 @@ def _compute_full_chart(owner: str, birth: dict) -> None:
 
 
 def _full_chart_or_kickoff(owner: str, birth: dict) -> dict | None:
-    """Return the cached full chart, or None and start a background compute."""
+    """Return the cached full chart, or None and start a background compute.
+
+    A cooldown stops a repeatedly-failing compute (e.g. the chart is too heavy for
+    the host) from re-kicking on every poll and jamming the chart service."""
     cached = _chart_cache.get(owner, "full", _birth_hash(birth), _FULL_CHART_TTL_SECONDS)
     if cached is not None:
         return cached
+    now = time.time()
     with _full_chart_jobs_lock:
-        if owner not in _full_chart_jobs:
+        running = owner in _full_chart_jobs
+        cooling = (now - _full_chart_last_kick.get(owner, 0.0)) < _FULL_CHART_COOLDOWN
+        if not running and not cooling:
             _full_chart_jobs.add(owner)
+            _full_chart_last_kick[owner] = now
             threading.Thread(target=_compute_full_chart, args=(owner, dict(birth)), daemon=True).start()
     return None
 

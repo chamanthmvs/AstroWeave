@@ -32,10 +32,10 @@ class ChartClientTests(unittest.TestCase):
         self.assertNotIn("cd chart_service", message)
 
     @patch("astroweave.common.tools.chart_client.httpx.post")
-    def test_bad_response_status_propagates_as_http_error(self, mock_post):
-        # A reachable service returning an error status is NOT a 503-style
-        # outage; it stays an httpx error so callers treat it as a soft failure.
+    def test_bad_request_4xx_propagates_as_http_error(self, mock_post):
+        # A 4xx (genuine bad request) stays an httpx error, not a 503-style outage.
         response = MagicMock()
+        response.status_code = 400
         response.raise_for_status.side_effect = httpx.HTTPStatusError(
             "bad request", request=MagicMock(), response=MagicMock()
         )
@@ -45,8 +45,19 @@ class ChartClientTests(unittest.TestCase):
             get_birth_chart(**_BIRTH)
 
     @patch("astroweave.common.tools.chart_client.httpx.post")
+    def test_5xx_is_treated_as_unavailable(self, mock_post):
+        # A 5xx (busy/restarting/crashed service) becomes ChartServiceUnavailable.
+        response = MagicMock()
+        response.status_code = 502
+        mock_post.return_value = response
+
+        with self.assertRaises(ChartServiceUnavailable):
+            get_birth_chart(**_BIRTH)
+
+    @patch("astroweave.common.tools.chart_client.httpx.post")
     def test_successful_call_returns_chart_payload(self, mock_post):
         response = MagicMock()
+        response.status_code = 200
         response.raise_for_status.return_value = None
         response.json.return_value = {"d1": {"ok": True}}
         mock_post.return_value = response
