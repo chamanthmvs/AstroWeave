@@ -48,9 +48,9 @@ function describe(detail: unknown): { message: string; code?: string } {
 
 export async function api<T = unknown>(
   path: string,
-  options: { method?: string; body?: unknown; auth?: boolean } = {},
+  options: { method?: string; body?: unknown; auth?: boolean; timeoutMs?: number } = {},
 ): Promise<T> {
-  const { method = "GET", body, auth = true } = options;
+  const { method = "GET", body, auth = true, timeoutMs = 60000 } = options;
   const headers: Record<string, string> = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (auth) {
@@ -58,22 +58,28 @@ export async function api<T = unknown>(
     if (token) headers["Authorization"] = `Bearer ${token}`;
   }
 
-  // Free hosting sleeps when idle, so the first request can fail or hang while
-  // the server wakes. Retry network-level failures a few times before giving up.
+  // Each attempt has its own timeout (via AbortController) so a stuck request
+  // never spins forever — it fails to a clear error the UI can recover from.
+  // GETs are retried a couple of times to ride out a brief cold start.
   let response: Response | null = null;
-  const attempts = method === "GET" ? 4 : 2;
+  const attempts = method === "GET" ? 3 : 1;
   for (let attempt = 0; attempt < attempts; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       response = await fetch(`${BASE}${path}`, {
         method,
         headers,
         body: body !== undefined ? JSON.stringify(body) : undefined,
+        signal: controller.signal,
       });
+      clearTimeout(timer);
       break;
     } catch {
+      clearTimeout(timer);
       if (attempt === attempts - 1) {
         throw new ApiError(
-          "The server is waking up — our free hosting sleeps when idle. Please try again in a few seconds.",
+          "The server is waking up or taking too long — our free hosting sleeps when idle. Please try again in a few seconds.",
           0,
         );
       }

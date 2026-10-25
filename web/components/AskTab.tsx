@@ -51,6 +51,7 @@ export default function AskTab() {
     try {
       const res = await api<RunResponse>("/run", {
         method: "POST",
+        timeoutMs: 180000, // a multi-agent reading can take a while
         body: {
           query: text,
           methodology,
