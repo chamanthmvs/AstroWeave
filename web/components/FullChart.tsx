@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { api } from "@/lib/api";
+import type { ChartScope } from "@/lib/types";
+import ChartScopeNote from "./ChartScopeNote";
 
 type Dasha = {
   maha_lord: string; maha_start: string; maha_end: string;
@@ -19,6 +21,7 @@ type FullChartData = {
   divisional_charts: Record<string, Varga>;
   shadbala: Record<string, { strength_rupas: number; strength_ratio: number }>;
   ashtakavarga: { samudhaya?: Record<string, number> };
+  chart_scope?: ChartScope | null;
 };
 
 export default function FullChart() {
@@ -83,6 +86,9 @@ export default function FullChart() {
 
   return (
     <div className="stack">
+      {data.chart_scope && (
+        <div className="card"><ChartScopeNote scope={data.chart_scope} /></div>
+      )}
       {d && (
         <div className="card">
           <div className="section-title">Current Vimshottari period</div>

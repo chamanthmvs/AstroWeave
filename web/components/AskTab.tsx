@@ -2,10 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api";
-import type { RunResponse } from "@/lib/types";
+import type { ChartScope, RunResponse } from "@/lib/types";
 import CostPanel, { usd } from "./CostPanel";
+import ChartScopeNote from "./ChartScopeNote";
 
-type Msg = { role: "user" | "assistant"; content: string; trace?: string; cost?: number };
+type Msg = { role: "user" | "assistant"; content: string; trace?: string; cost?: number; scope?: ChartScope | null };
 type Quota = { used: number; limit: number | null; remaining: number | null };
 
 function uuid(): string {
@@ -71,6 +72,7 @@ export default function AskTab() {
           content: res.answer || "No answer was produced.",
           trace: consulted.length ? `Consulted: ${consulted.join(", ")}` : undefined,
           cost: res.cost_usd,
+          scope: res.chart_scope,
         },
       ]);
       loadQuota();
@@ -119,6 +121,7 @@ export default function AskTab() {
             {m.role === "assistant" && m.cost != null && m.cost > 0 && (
               <div className="trace">This reading cost us ≈ {usd(m.cost)}</div>
             )}
+            {m.role === "assistant" && m.scope && <ChartScopeNote scope={m.scope} />}
           </div>
         ))}
         {busy && <div className="bubble assistant">Reading your chart…</div>}
