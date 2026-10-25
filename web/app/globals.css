@@ -420,6 +420,18 @@ textarea { resize: vertical; min-height: 56px; }
 .koota-row { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 11px 0; border-top: 1px solid var(--border); }
 .koota-name { font-weight: 600; }
 
+.banner {
+  background: var(--accent-soft); border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm); padding: 12px 16px; margin-bottom: 20px;
+  font-size: 0.9rem; color: var(--text-dim); backdrop-filter: blur(var(--glass-blur));
+}
+.banner b { color: var(--text); }
+.tab:disabled { opacity: 0.45; cursor: not-allowed; }
+
+.num-feature { text-align: center; }
+.num-big { font-family: var(--font-display); font-size: 3.4rem; line-height: 1; color: var(--accent-2); margin: 6px 0 2px; }
+.num-headline { font-family: var(--font-display); font-size: 1.3rem; }
+
 .cost-panel { }
 .cost-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 12px; }
 .cost-stat { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 12px 14px; }

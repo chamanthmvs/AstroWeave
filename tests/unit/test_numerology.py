@@ -1,10 +1,13 @@
 import unittest
 
 from astroweave.common.numerology import (
+    _reduce,
     birthday_number,
     build_numerology,
     expression,
     life_path,
+    maturity,
+    personal_year,
     personality,
     soul_urge,
 )
@@ -28,11 +31,21 @@ class NumerologyTests(unittest.TestCase):
         # consonants: J=1 H=8 N=5 = 14 -> 5
         self.assertEqual(personality("John"), 5)
 
+    def test_personal_year_and_maturity(self):
+        # Personal Year 2026 for Jan 1: month 1 + day 1 + (2+0+2+6=10->1) = 3.
+        self.assertEqual(personal_year("1990-01-01", year=2026), 3)
+        self.assertTrue(1 <= personal_year("1990-01-01") <= 9)  # reduced 1-9
+        # Maturity = reduce(Life Path + Expression).
+        self.assertEqual(
+            maturity("Maya Patel", "1990-01-01"),
+            _reduce(life_path("1990-01-01") + expression("Maya Patel")),
+        )
+
     def test_build_includes_core_numbers_and_meanings(self):
         result = build_numerology("Maya Patel", "1990-01-01")
         self.assertEqual(result["method"], "Pythagorean")
         nums = result["numbers"]
-        for key in ("life_path", "birthday", "expression", "soul_urge", "personality"):
+        for key in ("life_path", "personal_year", "birthday", "expression", "soul_urge", "personality", "maturity"):
             self.assertIn(key, nums)
             self.assertTrue(nums[key]["meaning"])
             self.assertTrue(nums[key]["about"])

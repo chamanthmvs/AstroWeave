@@ -6,11 +6,15 @@ import { api } from "@/lib/api";
 type Num = { number: number; meaning: string; about: string };
 type Numerology = { name_used: string; method: string; numbers: Record<string, Num> };
 
-const LABELS: { key: string; label: string }[] = [
+const FEATURED: { key: string; label: string }[] = [
   { key: "life_path", label: "Life Path" },
+  { key: "personal_year", label: "Personal Year" },
+];
+const OTHERS: { key: string; label: string }[] = [
   { key: "expression", label: "Expression" },
   { key: "soul_urge", label: "Soul Urge" },
   { key: "personality", label: "Personality" },
+  { key: "maturity", label: "Maturity" },
   { key: "birthday", label: "Birthday" },
 ];
 
@@ -55,20 +59,39 @@ export default function NumerologyTab() {
       )}
 
       {data && (
-        <div className="atlas-grid">
-          {LABELS.filter((l) => data.numbers[l.key]).map((l) => {
-            const n = data.numbers[l.key];
-            return (
-              <article key={l.key} className="card nak-card">
-                <span className="num">{n.number}</span>
-                <div className="nak-name">{l.label}</div>
-                <div className="nak-south">{n.meaning.split(" — ")[0]}</div>
-                <p className="nak-theme">{n.meaning.includes(" — ") ? n.meaning.split(" — ")[1] : n.meaning}</p>
-                <p className="note">{n.about}</p>
-              </article>
-            );
-          })}
-        </div>
+        <>
+          <div className="row-2">
+            {FEATURED.filter((l) => data.numbers[l.key]).map((l) => {
+              const n = data.numbers[l.key];
+              return (
+                <article key={l.key} className="card card-glow num-feature">
+                  <div className="eyebrow">{l.label}</div>
+                  <div className="num-big">{n.number}</div>
+                  <div className="num-headline">{n.meaning.split(" — ")[0]}</div>
+                  <p className="dim" style={{ marginTop: 6 }}>
+                    {n.meaning.includes(" — ") ? n.meaning.split(" — ")[1] : n.meaning}
+                  </p>
+                  <p className="note" style={{ marginTop: 8 }}>{n.about}</p>
+                </article>
+              );
+            })}
+          </div>
+
+          <div className="atlas-grid" style={{ marginTop: 16 }}>
+            {OTHERS.filter((l) => data.numbers[l.key]).map((l) => {
+              const n = data.numbers[l.key];
+              return (
+                <article key={l.key} className="card nak-card">
+                  <span className="num">{n.number}</span>
+                  <div className="nak-name">{l.label}</div>
+                  <div className="nak-south">{n.meaning.split(" — ")[0]}</div>
+                  <p className="nak-theme">{n.meaning.includes(" — ") ? n.meaning.split(" — ")[1] : n.meaning}</p>
+                  <p className="note">{n.about}</p>
+                </article>
+              );
+            })}
+          </div>
+        </>
       )}
 
       {data && (

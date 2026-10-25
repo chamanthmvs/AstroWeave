@@ -274,6 +274,13 @@ class ApiTests(unittest.TestCase):
     def test_admin_summary_requires_a_token(self):
         self.assertEqual(self.client.get("/admin/summary").status_code, 401)
 
+    def test_ready_reports_chart_service(self):
+        # Chart service isn't running in tests -> reachable key, value False.
+        response = self.client.get("/ready")
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("chart_service", response.json())
+        self.assertIsInstance(response.json()["chart_service"], bool)
+
     def test_root_is_api_only(self):
         # Backend is API-only now; the frontend is the separate Next.js app.
         response = self.client.get("/")

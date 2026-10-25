@@ -598,6 +598,21 @@ def health() -> dict[str, str]:
     return {"status": "ok", "service": "astroweave-api"}
 
 
+@app.get("/ready")
+def ready() -> dict[str, bool]:
+    """Is the chart service awake? The UI uses this to enable/disable the
+    chart-dependent tabs, and polling it also helps wake a sleeping service."""
+    import httpx
+
+    from astroweave.common.tools.chart_client import CHART_SERVICE_URL
+
+    try:
+        response = httpx.get(f"{CHART_SERVICE_URL.rstrip('/')}/health", timeout=5)
+        return {"chart_service": response.status_code == 200}
+    except Exception:  # noqa: BLE001 - any failure means "not ready yet"
+        return {"chart_service": False}
+
+
 @app.get("/nakshatras")
 def nakshatras() -> dict[str, object]:
     """The 27 nakshatras with canonical attributes for the Star Atlas tab.
