@@ -412,12 +412,29 @@ def _birth_for(username: str) -> dict:
     return {key: value for key, value in birth.items() if key != "date_known"}
 
 
+# The chart summary and the classical profile only need the D1 (rasi) chart, so
+# they skip the heavy sections (shadbala, yogas, transits, ashtakavarga, dashas,
+# divisional charts). On free shared-CPU hosting the full chart can take 20-30s
+# while this light one is near-instant.
+_LIGHT_CHART = dict(
+    varga_factors=[],
+    include_dasha_bhukti=False,
+    include_bhava_chart=False,
+    include_ashtakavarga=False,
+    include_shadbala=False,
+    include_yogas=False,
+    include_transits=False,
+    include_current_dasha=False,
+    include_kp=False,
+)
+
+
 @app.get("/me/chart")
 def my_chart_summary(username: str = Depends(authenticated_username)) -> dict:
     """The signed-in user's Rasi (Moon sign), Nakshatra, and Lagna for the side panel."""
     birth = _birth_for(username)
     try:
-        summary = build_chart_view(get_birth_chart(**birth), "general", "both").get("summary", {})
+        summary = build_chart_view(get_birth_chart(**birth, **_LIGHT_CHART), "general", "both").get("summary", {})
     except ChartServiceUnavailable as error:
         raise HTTPException(status_code=503, detail={"code": "chart_service_unavailable", "message": str(error)}) from error
     return {
@@ -448,7 +465,7 @@ def my_profile(username: str = Depends(authenticated_username)) -> dict:
     """Deterministic classical profile (Nakshatra/Rasi/Lagna attributes) for the user."""
     birth = _birth_for(username)
     try:
-        return build_profile(get_birth_chart(**birth))
+        return build_profile(get_birth_chart(**birth, **_LIGHT_CHART))
     except ChartServiceUnavailable as error:
         raise HTTPException(status_code=503, detail={"code": "chart_service_unavailable", "message": str(error)}) from error
 

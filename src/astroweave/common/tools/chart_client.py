@@ -38,6 +38,11 @@ def get_birth_chart(
     include_dasha_bhukti: bool = True,
     include_bhava_chart: bool = True,
     include_ashtakavarga: bool = True,
+    include_shadbala: bool = True,
+    include_yogas: bool = True,
+    include_transits: bool = True,
+    include_current_dasha: bool = True,
+    include_kp: bool = True,
     timeout: float | None = None,
 ) -> dict[str, object]:
     """Fetch a birth chart from the isolated chart_service over HTTP.
@@ -61,6 +66,11 @@ def get_birth_chart(
         "include_dasha_bhukti": include_dasha_bhukti,
         "include_bhava_chart": include_bhava_chart,
         "include_ashtakavarga": include_ashtakavarga,
+        "include_shadbala": include_shadbala,
+        "include_yogas": include_yogas,
+        "include_transits": include_transits,
+        "include_current_dasha": include_current_dasha,
+        "include_kp": include_kp,
     }
     logger.info("Requesting chart from chart_service date=%s time=%s", date, time)
     return _post("/chart", payload, timeout if timeout is not None else _default_timeout())
