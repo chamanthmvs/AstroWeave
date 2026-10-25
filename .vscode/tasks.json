@@ -1,7 +1,7 @@
 {
-  // Non-debug way to spin everything up. Run "▶ AstroWeave: all services"
-  // (Terminal → Run Task…, or ⌘⇧B since it is the default build task) to start
-  // the chart service and the hot-reloading backend API in parallel terminals.
+  // Non-debug way to spin things up. Run a task via Terminal → Run Task…
+  //   "▶ AstroWeave: backend (API + chart)" is the default build task (⌘⇧B).
+  //   "▶ AstroWeave: full stack" also starts the Next.js web app (needs Node 20+).
   "version": "2.0.0",
   "tasks": [
     {
@@ -22,10 +22,10 @@
       "presentation": { "group": "astroweave", "panel": "dedicated" }
     },
     {
-      "label": "Backend API + web UI (:8001)",
+      "label": "Backend API (:8000)",
       "type": "shell",
       "command": "${workspaceFolder}/.venv/bin/uvicorn",
-      "args": ["astroweave.api.main:app", "--reload", "--port", "8001"],
+      "args": ["astroweave.api.main:app", "--reload", "--port", "8000"],
       "options": { "cwd": "${workspaceFolder}" },
       "isBackground": true,
       "problemMatcher": {
@@ -39,11 +39,33 @@
       "presentation": { "group": "astroweave", "panel": "dedicated" }
     },
     {
-      "label": "▶ AstroWeave: all services",
-      "dependsOn": ["Chart service (:8100)", "Backend API + web UI (:8001)"],
+      "label": "Web (Next.js :3000)",
+      "type": "shell",
+      "command": "npm run dev",
+      "options": { "cwd": "${workspaceFolder}/web" },
+      "isBackground": true,
+      "problemMatcher": {
+        "pattern": { "regexp": "^$" },
+        "background": {
+          "activeOnStart": true,
+          "beginsPattern": ".",
+          "endsPattern": "Ready in|compiled|started server"
+        }
+      },
+      "presentation": { "group": "astroweave", "panel": "dedicated" }
+    },
+    {
+      "label": "▶ AstroWeave: backend (API + chart)",
+      "dependsOn": ["Chart service (:8100)", "Backend API (:8000)"],
       "dependsOrder": "parallel",
       "problemMatcher": [],
       "group": { "kind": "build", "isDefault": true }
+    },
+    {
+      "label": "▶ AstroWeave: full stack",
+      "dependsOn": ["Chart service (:8100)", "Backend API (:8000)", "Web (Next.js :3000)"],
+      "dependsOrder": "parallel",
+      "problemMatcher": []
     },
     {
       "label": "Run tests",

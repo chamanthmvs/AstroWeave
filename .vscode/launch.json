@@ -1,7 +1,8 @@
 {
-  // One-click run/debug. Open the "Run and Debug" panel (⇧⌘D), pick
-  // "▶ AstroWeave: all services" from the dropdown, and press the green play
-  // button to start the chart service and the backend API together.
+  // One-click run/debug. Open the "Run and Debug" panel (⇧⌘D) and pick a compound:
+  //   "▶ AstroWeave: backend (API + chart)" — the two Python services (no Node needed)
+  //   "▶ AstroWeave: full stack"            — also starts the Next.js web app (needs Node 20+)
+  // The backend is API-only now; the user-facing app is the Next.js project in web/.
   // The backend auto-loads .env.development from the workspace root.
   "version": "0.2.0",
   "configurations": [
@@ -16,22 +17,37 @@
       "console": "integratedTerminal"
     },
     {
-      "name": "Backend API + web UI (:8001)",
+      "name": "Backend API (:8000)",
       "type": "debugpy",
       "request": "launch",
       "module": "uvicorn",
-      "args": ["astroweave.api.main:app", "--port", "8001"],
+      "args": ["astroweave.api.main:app", "--port", "8000"],
       "cwd": "${workspaceFolder}",
       "python": "${workspaceFolder}/.venv/bin/python",
       "console": "integratedTerminal"
+    },
+    {
+      // Next.js dev server. Requires Node 20+ and `npm install` run once in web/.
+      // Talks to the backend via NEXT_PUBLIC_API_BASE (defaults to http://127.0.0.1:8000).
+      "name": "Web (Next.js :3000)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev",
+      "cwd": "${workspaceFolder}/web"
     }
   ],
   "compounds": [
     {
-      "name": "▶ AstroWeave: all services",
-      "configurations": ["Chart service (:8100)", "Backend API + web UI (:8001)"],
+      "name": "▶ AstroWeave: backend (API + chart)",
+      "configurations": ["Chart service (:8100)", "Backend API (:8000)"],
       "stopAll": true,
       "presentation": { "group": "astroweave", "order": 1 }
+    },
+    {
+      "name": "▶ AstroWeave: full stack",
+      "configurations": ["Chart service (:8100)", "Backend API (:8000)", "Web (Next.js :3000)"],
+      "stopAll": true,
+      "presentation": { "group": "astroweave", "order": 2 }
     }
   ]
 }
