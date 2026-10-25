@@ -1,6 +1,7 @@
 import hashlib
 import json
 import os
+import threading
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Query, status
@@ -598,19 +599,43 @@ def health() -> dict[str, str]:
     return {"status": "ok", "service": "astroweave-api"}
 
 
+_chart_waking = threading.Event()  # true while a background wake request is in flight
+
+
+def _wake_chart_service(url: str) -> None:
+    """Hold a long request open to wake a sleeping chart service (background)."""
+    import httpx
+
+    try:
+        httpx.get(url, timeout=90)
+    except Exception:  # noqa: BLE001
+        pass
+    finally:
+        _chart_waking.clear()
+
+
 @app.get("/ready")
 def ready() -> dict[str, bool]:
-    """Is the chart service awake? The UI uses this to enable/disable the
-    chart-dependent tabs, and polling it also helps wake a sleeping service."""
+    """Is the chart service awake? Returns the current status *fast* so the UI can
+    show a "waking up" state immediately; if the service is asleep it also kicks
+    off a background wake (a single long-held request), so a later poll flips to
+    ready once it is up."""
     import httpx
 
     from astroweave.common.tools.chart_client import CHART_SERVICE_URL
 
+    url = f"{CHART_SERVICE_URL.rstrip('/')}/health"
     try:
-        response = httpx.get(f"{CHART_SERVICE_URL.rstrip('/')}/health", timeout=5)
-        return {"chart_service": response.status_code == 200}
-    except Exception:  # noqa: BLE001 - any failure means "not ready yet"
-        return {"chart_service": False}
+        response = httpx.get(url, timeout=4)
+        if response.status_code == 200:
+            return {"chart_service": True}
+    except Exception:  # noqa: BLE001 - asleep or unreachable
+        pass
+    # Not ready: ensure exactly one background wake is in progress.
+    if not _chart_waking.is_set():
+        _chart_waking.set()
+        threading.Thread(target=_wake_chart_service, args=(url,), daemon=True).start()
+    return {"chart_service": False}
 
 
 @app.get("/nakshatras")
