@@ -2,9 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError } from "@/lib/api";
-import type { RunResponse } from "@/lib/types";
+import type { RunResponse, ConversationMessage } from "@/lib/types";
 import { useAuth } from "@/lib/auth";
 import CostPanel, { usd } from "./CostPanel";
+import ConversationHistory from "./ConversationHistory";
 
 type Msg = { role: "user" | "assistant"; content: string; trace?: string; cost?: number; startsTopic?: boolean };
 type Quota = { used: number; limit: number | null; remaining: number | null };
@@ -26,6 +27,7 @@ export default function AskTab() {
   const [error, setError] = useState("");
   const [quotaFull, setQuotaFull] = useState(false);
   const [quota, setQuota] = useState<Quota | null>(null);
+  const [showHistory, setShowHistory] = useState(false);
   const ids = useRef<{ conversation_id?: string; session_id?: string }>({});
 
   // Keep the current thread across page refreshes (per browser) so you don't lose
@@ -65,6 +67,24 @@ export default function AskTab() {
       localStorage.removeItem(STORE_KEY);
     } catch {
       /* ignore */
+    }
+  }
+
+  // Open a past conversation from the server-side history into the thread so you
+  // can read it and continue it as a follow-up.
+  async function openConversation(conversationId: string) {
+    setError("");
+    try {
+      const res = await api<{ messages: ConversationMessage[] }>(
+        `/conversations/${encodeURIComponent(conversationId)}/messages`,
+        { timeoutMs: 30000 },
+      );
+      setMessages(res.messages.map((m) => ({ role: m.role, content: m.content })));
+      ids.current = { conversation_id: conversationId }; // new session within this conversation
+      setMode("followup");
+      setShowHistory(false);
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Could not open that conversation.");
     }
   }
 
@@ -163,6 +183,22 @@ export default function AskTab() {
 
   return (
     <section>
+      <div className="ask-top">
+        <button className="btn-link" onClick={() => setShowHistory((s) => !s)}>
+          {showHistory ? "← Back to Ask" : "⟲ History"}
+        </button>
+      </div>
+
+      {showHistory && (
+        <ConversationHistory
+          onOpen={openConversation}
+          onClose={() => setShowHistory(false)}
+          activeId={ids.current.conversation_id}
+        />
+      )}
+
+      {!showHistory && (
+      <>
       {messages.length === 0 && (
         <div className="hero">
           <div className="eyebrow">Personal reading</div>
@@ -279,6 +315,8 @@ export default function AskTab() {
         Every reading runs on an LLM that we pay for ourselves, so daily questions are limited — thanks for
         your cooperation.
       </p>
+      </>
+      )}
     </section>
   );
 }

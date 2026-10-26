@@ -66,6 +66,19 @@ export type RunResponse = {
   cost_usd?: number;
 };
 
+export type Conversation = {
+  conversation_id: string;
+  title: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ConversationMessage = {
+  message_id: string;
+  role: "user" | "assistant";
+  content: string;
+};
+
 export type CostWindow = { runs: number; cost_usd: number };
 export type CostSummary = {
   currency: string;

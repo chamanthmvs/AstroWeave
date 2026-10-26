@@ -525,3 +525,20 @@ textarea { resize: vertical; min-height: 56px; }
 }
 .seg button.seg-on { background: var(--accent-soft); color: var(--text); }
 .seg button + button { border-left: 1px solid var(--border); }
+
+/* Ask: history toggle + past-conversations list */
+.ask-top { display: flex; justify-content: flex-end; margin-bottom: 8px; }
+.hist-list { display: flex; flex-direction: column; gap: 2px; }
+.hist-row {
+  display: flex; align-items: center; gap: 12px; cursor: pointer;
+  padding: 11px 12px; border-radius: 12px; border: 1px solid transparent;
+}
+.hist-row:hover { background: var(--accent-soft); border-color: var(--border); }
+.hist-row + .hist-row { border-top: 1px solid var(--border); }
+.hist-active { background: var(--accent-soft); border-color: var(--border-strong); }
+.hist-main { margin-right: auto; min-width: 0; }
+.hist-title {
+  font-weight: 600; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 60vw;
+}
+.hist-del { flex-shrink: 0; }
