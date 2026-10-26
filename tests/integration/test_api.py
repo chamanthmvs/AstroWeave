@@ -12,6 +12,15 @@ from astroweave.common.conversation import ConversationStore
 from astroweave.common.security import create_user_token
 from astroweave.specialist_service import app as specialist_app
 
+_PARTNER_BIRTH = {
+    "date": "1992-05-15",
+    "time": "14:30:00",
+    "latitude": 19.07,
+    "longitude": 72.88,
+    "utc_offset_hours": 5.5,
+    "place_name": "Mumbai",
+}
+
 
 class ApiTests(unittest.TestCase):
     @classmethod
@@ -296,6 +305,57 @@ class ApiTests(unittest.TestCase):
             r = self.client.get("/me/chart/full", headers=self._headers())
         self.assertEqual(r.status_code, 200)
         self.assertEqual(r.json()["status"], "disabled")
+
+    def test_match_reading_disabled_on_free_tier(self):
+        with patch.dict("os.environ", {"ASTROWEAVE_ENABLE_READINGS": "false"}):
+            r = self.client.post(
+                "/match/reading",
+                json={"partner": _PARTNER_BIRTH, "person_is_groom": True},
+                headers=self._headers(),
+            )
+        self.assertEqual(r.status_code, 503)
+        self.assertEqual(r.json()["detail"]["code"], "readings_disabled")
+
+    @patch("astroweave.api.main._match_access", return_value=False)
+    def test_match_reading_requires_access(self, _access):
+        r = self.client.post(
+            "/match/reading",
+            json={"partner": _PARTNER_BIRTH, "person_is_groom": True},
+            headers=self._headers(),
+        )
+        self.assertEqual(r.status_code, 403)
+        self.assertEqual(r.json()["detail"]["code"], "match_access_required")
+
+    @patch("astroweave.api.main.run_match_reading")
+    @patch("astroweave.api.main._cached_chart", return_value={"d1": {"ascendant": "Aries"}})
+    @patch("astroweave.api.main.match_charts", return_value={"north": {"total": 25.5}})
+    @patch("astroweave.api.main._match_access", return_value=True)
+    def test_match_reading_returns_reading_with_access(self, _access, _points, _chart, reading):
+        reading.return_value = {
+            "partner_overview": "An overview grounded in the chart.",
+            "partner_temperament": "Thoughtful.",
+            "partner_family": "", "partner_health": "", "partner_work": "",
+            "partner_finances": "", "care_and_respect": "", "married_life": "",
+            "overall": "A workable match with some friction.",
+            "confidence": "medium", "confidence_reason": "Factors mixed.", "limits": "Guidance only.",
+        }
+        with patch("astroweave.api.main._user_profile", return_value={"email": "demo-user", "birth_details": dict(_PARTNER_BIRTH)}):
+            r = self.client.post(
+                "/match/reading",
+                json={"partner": _PARTNER_BIRTH, "person_is_groom": True, "message_id": "match-1"},
+                headers=self._headers(),
+            )
+        self.assertEqual(r.status_code, 200)
+        body = r.json()
+        self.assertEqual(body["reading"]["confidence"], "medium")
+        self.assertEqual(body["points"]["north"]["total"], 25.5)
+        self.assertIn("cost_usd", body)
+        self.usage_store.record_run.assert_called_once()
+
+    def test_admin_match_access_requires_admin(self):
+        with patch.dict("os.environ", {"ASTROWEAVE_ADMIN_EMAILS": ""}):
+            r = self.client.get("/admin/match-access", headers=self._headers())
+        self.assertEqual(r.status_code, 403)
 
     def test_ready_reports_chart_service(self):
         # Chart service isn't running in tests -> reachable key, value False.

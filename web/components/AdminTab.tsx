@@ -10,6 +10,7 @@ type Summary = {
 };
 type Allowed = { email: string; invited_by: string | null; created_at: string };
 type AccessReq = { email: string; name: string | null; note: string | null; created_at: string };
+type MatchGrant = { email: string; granted_by: string | null; created_at: string };
 
 const money = (n: number) => `$${(n ?? 0).toFixed(4)}`;
 const num = (n: number) => (n ?? 0).toLocaleString();
@@ -18,6 +19,8 @@ export default function AdminTab() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [allowed, setAllowed] = useState<Allowed[]>([]);
   const [requests, setRequests] = useState<AccessReq[]>([]);
+  const [matchGrants, setMatchGrants] = useState<MatchGrant[]>([]);
+  const [matchEmail, setMatchEmail] = useState("");
   const [newEmail, setNewEmail] = useState("");
   const [resetEmail, setResetEmail] = useState("");
   const [mintedCode, setMintedCode] = useState("");
@@ -26,14 +29,16 @@ export default function AdminTab() {
   const load = useCallback(async () => {
     setError("");
     try {
-      const [s, a, r] = await Promise.all([
+      const [s, a, r, m] = await Promise.all([
         api<Summary>("/admin/summary"),
         api<{ allowed: Allowed[] }>("/admin/allowlist"),
         api<{ requests: AccessReq[] }>("/admin/access-requests"),
+        api<{ granted: MatchGrant[] }>("/admin/match-access"),
       ]);
       setSummary(s);
       setAllowed(a.allowed);
       setRequests(r.requests);
+      setMatchGrants(m.granted);
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Could not load admin data.");
     }
@@ -58,6 +63,15 @@ export default function AdminTab() {
   }
   async function decline(email: string) {
     await api(`/admin/access-requests/${encodeURIComponent(email)}`, { method: "DELETE" });
+    load();
+  }
+  async function grantMatch(email: string) {
+    await api("/admin/match-access", { method: "POST", body: { email } });
+    setMatchEmail("");
+    load();
+  }
+  async function revokeMatch(email: string) {
+    await api(`/admin/match-access/${encodeURIComponent(email)}`, { method: "DELETE" });
     load();
   }
   async function mintReset() {
@@ -180,6 +194,36 @@ export default function AdminTab() {
                 <span className="dim">invited by {a.invited_by || "—"}</span>
                 <span className="admin-actions">
                   <button className="btn btn-ghost" onClick={() => revoke(a.email)}>Remove</button>
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="card">
+        <div className="section-title">Kundli AI reading access</div>
+        <p className="note" style={{ marginTop: 6 }}>
+          Unlock the in-depth AI compatibility reading per user. Marriage is a life decision, so this
+          heavier full-chart reading stays off by default.
+        </p>
+        <div className="geo-row" style={{ marginTop: 10 }}>
+          <label className="field">
+            <span>Grant to email</span>
+            <input value={matchEmail} onChange={(e) => setMatchEmail(e.target.value)} placeholder="person@gmail.com" />
+          </label>
+          <button className="btn btn-primary" disabled={!matchEmail.trim()} onClick={() => grantMatch(matchEmail.trim().toLowerCase())}>
+            Grant
+          </button>
+        </div>
+        {matchGrants.length > 0 && (
+          <div className="admin-table" style={{ marginTop: 12 }}>
+            {matchGrants.map((g) => (
+              <div className="admin-row admin-row-wide" key={g.email}>
+                <span className="mono">{g.email}</span>
+                <span className="dim">granted by {g.granted_by || "—"}</span>
+                <span className="admin-actions">
+                  <button className="btn btn-ghost" onClick={() => revokeMatch(g.email)}>Revoke</button>
                 </span>
               </div>
             ))}

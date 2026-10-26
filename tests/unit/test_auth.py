@@ -25,6 +25,19 @@ class AuthTests(unittest.TestCase):
         self.connection = auth.get_connection(Path(self._tempdir.name) / "test.db")
         self.addCleanup(self.connection.close)
 
+    def test_match_access_grant_list_and_revoke(self) -> None:
+        email = "bride-seeker@gmail.com"
+        self.assertFalse(auth.has_match_access(self.connection, email))
+        auth.grant_match_access(self.connection, email, granted_by="admin@gmail.com")
+        self.assertTrue(auth.has_match_access(self.connection, email))
+        auth.grant_match_access(self.connection, email, granted_by="admin@gmail.com")  # idempotent
+        granted = auth.list_match_access(self.connection)
+        self.assertEqual([g["email"] for g in granted], [email])
+        self.assertEqual(granted[0]["granted_by"], "admin@gmail.com")
+        self.assertTrue(auth.revoke_match_access(self.connection, email))
+        self.assertFalse(auth.has_match_access(self.connection, email))
+        self.assertFalse(auth.revoke_match_access(self.connection, email))
+
     def test_create_user_hashes_password_and_stores_birth_details(self) -> None:
         password = "correct horse battery staple"
 

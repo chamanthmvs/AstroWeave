@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import type { MatchReading } from "@/lib/types";
 import BirthFields, { emptyBirth, isGeocoded, type BirthForm } from "./BirthFields";
 
 type Koota = { koota: string; score: number; max: number; favourable: boolean };
@@ -45,7 +46,7 @@ function interpret(total: number, outOf: number): string {
 }
 
 export default function MatchTab() {
-  const { user } = useAuth();
+  const { user, readingsEnabled } = useAuth();
   const gender = (user?.gender || "").toLowerCase();
   const autoRole: "groom" | "bride" | null = gender === "male" ? "groom" : gender === "female" ? "bride" : null;
 
@@ -54,13 +55,29 @@ export default function MatchTab() {
   const [result, setResult] = useState<MatchResult | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [reading, setReading] = useState<MatchReading | null>(null);
+  const [readingBusy, setReadingBusy] = useState(false);
+  const [readingError, setReadingError] = useState("");
 
   const personIsGroom = autoRole ? autoRole === "groom" : role === "groom";
   const partnerIs = personIsGroom ? "bride" : "groom";
 
+  function partnerPayload() {
+    return {
+      date: birth.date,
+      time: birth.time.length === 5 ? `${birth.time}:00` : birth.time,
+      latitude: birth.latitude,
+      longitude: birth.longitude,
+      utc_offset_hours: birth.utc_offset_hours,
+      place_name: birth.place,
+    };
+  }
+
   async function match(e: React.FormEvent) {
     e.preventDefault();
     setError("");
+    setReading(null);
+    setReadingError("");
     if (!isGeocoded(birth)) {
       setError("Please find the partner's birth place first.");
       return;
@@ -69,23 +86,30 @@ export default function MatchTab() {
     try {
       const res = await api<MatchResult>("/match", {
         method: "POST",
-        body: {
-          partner: {
-            date: birth.date,
-            time: birth.time.length === 5 ? `${birth.time}:00` : birth.time,
-            latitude: birth.latitude,
-            longitude: birth.longitude,
-            utc_offset_hours: birth.utc_offset_hours,
-            place_name: birth.place,
-          },
-          person_is_groom: personIsGroom,
-        },
+        body: { partner: partnerPayload(), person_is_groom: personIsGroom },
       });
       setResult(res);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "The match could not be computed.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function getReading() {
+    setReadingError("");
+    setReadingBusy(true);
+    try {
+      const res = await api<{ reading: MatchReading }>("/match/reading", {
+        method: "POST",
+        timeoutMs: 180000,
+        body: { partner: partnerPayload(), person_is_groom: personIsGroom },
+      });
+      setReading(res.reading);
+    } catch (err: unknown) {
+      setReadingError(err instanceof Error ? err.message : "The reading could not be generated.");
+    } finally {
+      setReadingBusy(false);
     }
   }
 
@@ -194,12 +218,70 @@ export default function MatchTab() {
             These scores are a classical screening from the Moon nakshatras alone. A full reading weighs the
             whole chart — dashas, doshas and the 7th house — so treat this as guidance, not a final answer.
           </p>
-          <p className="note center" style={{ marginTop: 6 }}>
-            A detailed AI compatibility reading — temperament, family, health, finances and married-life
-            indications from the full charts — is available on the full version.
-          </p>
+
+          <div className="card card-glow">
+            <div className="section-title">In-depth AI compatibility reading</div>
+            <p className="dim" style={{ margin: "8px 0 14px" }}>
+              A grounded reading of the {partnerIs}&apos;s chart — temperament, family, health, work and
+              finances — how they&apos;re likely to care for and respect a partner, and the married-life
+              indications from both full charts. Marriage is a life decision, so we treat this seriously:
+              it describes tendencies, never a verdict on a person.
+            </p>
+
+            {!readingsEnabled ? (
+              <p className="note">
+                Paused on the free tier — the full charts this reading needs aren&apos;t computed on free
+                hosting. It runs on the full version; we&apos;ll switch it on once we&apos;re funded.
+              </p>
+            ) : !user?.match_access ? (
+              <p className="note">
+                This reading is unlocked individually. Ask an admin to enable it for your account, and
+                you&apos;ll get the full compatibility reading.
+              </p>
+            ) : reading ? (
+              <div className="stack" style={{ marginTop: 4 }}>
+                <ReadingBlock title="Overview" body={reading.partner_overview} />
+                <ReadingBlock title="Temperament & mind" body={reading.partner_temperament} />
+                <ReadingBlock title="Family life" body={reading.partner_family} />
+                <ReadingBlock title="Health & constitution" body={reading.partner_health} />
+                <ReadingBlock title="Work" body={reading.partner_work} />
+                <ReadingBlock title="Finances" body={reading.partner_finances} />
+                <ReadingBlock title="Care & respect for a partner" body={reading.care_and_respect} />
+                <ReadingBlock title="Married life" body={reading.married_life} />
+                <ReadingBlock title="In short" body={reading.overall} />
+                <ReadingBlock title="What this can't tell you" body={reading.limits} />
+                <p className="note" style={{ marginTop: 4 }}>
+                  Confidence: <b className="dim">{reading.confidence}</b>
+                  {reading.confidence_reason ? ` — ${reading.confidence_reason}` : ""}
+                </p>
+                <button className="btn-link" onClick={getReading} disabled={readingBusy} style={{ marginTop: 2 }}>
+                  {readingBusy ? "Regenerating…" : "Regenerate"}
+                </button>
+              </div>
+            ) : (
+              <>
+                <button className="btn btn-primary" onClick={getReading} disabled={readingBusy}>
+                  {readingBusy ? "Reading the charts…" : "Generate the in-depth reading"}
+                </button>
+                <p className="note" style={{ marginTop: 8 }}>
+                  Uses both full charts and the paid model, so it counts as one of your daily questions.
+                </p>
+              </>
+            )}
+            {readingError && <p className="error">{readingError}</p>}
+          </div>
         </>
       )}
     </section>
+  );
+}
+
+function ReadingBlock({ title, body }: { title: string; body: string }) {
+  if (!body) return null;
+  return (
+    <div>
+      <div className="koota-name">{title}</div>
+      <p className="dim" style={{ marginTop: 4, whiteSpace: "pre-wrap" }}>{body}</p>
+    </div>
   );
 }

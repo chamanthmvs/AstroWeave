@@ -13,8 +13,24 @@ export type User = {
   name: string;
   email_verified: boolean;
   is_admin?: boolean;
+  match_access?: boolean;
   gender?: string | null;
   birth_details: BirthDetails;
+};
+
+export type MatchReading = {
+  partner_overview: string;
+  partner_temperament: string;
+  partner_family: string;
+  partner_health: string;
+  partner_work: string;
+  partner_finances: string;
+  care_and_respect: string;
+  married_life: string;
+  overall: string;
+  confidence: "low" | "medium" | "high";
+  confidence_reason: string;
+  limits: string;
 };
 
 export type ChartSummary = {

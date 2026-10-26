@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from app import auth
 from app import geocoding
+from astroweave.agents.match import MatchReadingError, run_match_reading
 from astroweave.agents.specialists import SPECIALIST_REGISTRY
 from astroweave.common.config import get_logger
 from astroweave.common.conversation import (
@@ -209,8 +210,15 @@ def _require_gmail(email: str) -> None:
 
 
 def _with_admin(user: dict) -> dict:
-    """Tag a user payload with whether they are an admin (drives the admin tab)."""
-    return {**user, "is_admin": user.get("email", "").strip().lower() in _admin_emails()}
+    """Tag a user payload with admin + Kundli-AI access (drives the UI gating)."""
+    email = user.get("email", "").strip().lower()
+    is_admin = email in _admin_emails()
+    if is_admin:
+        match_access = True
+    else:
+        with auth.get_connection() as connection:
+            match_access = auth.has_match_access(connection, email)
+    return {**user, "is_admin": is_admin, "match_access": match_access}
 
 
 def _send_verification_email(email: str) -> bool:
@@ -597,6 +605,11 @@ class MatchRequest(BaseModel):
     person_is_groom: bool = True
 
 
+class MatchReadingRequest(MatchRequest):
+    # Carried only for idempotent usage/cost accounting, like /run's message_id.
+    message_id: str = Field(default_factory=lambda: str(uuid4()), min_length=1, max_length=128)
+
+
 @app.post("/match")
 def kundli_match(request: MatchRequest, username: str = Depends(authenticated_username)) -> dict:
     """Kundli Milan between the signed-in user and a partner (North + South + Manglik)."""
@@ -606,6 +619,90 @@ def kundli_match(request: MatchRequest, username: str = Depends(authenticated_us
         return match_charts(person, partner, person_is_groom=request.person_is_groom)
     except ChartServiceUnavailable as error:
         raise HTTPException(status_code=503, detail={"code": "chart_service_unavailable", "message": str(error)}) from error
+
+
+_MATCH_ACCESS_MESSAGE = (
+    "The in-depth AI compatibility reading is unlocked individually — marriage is a "
+    "life decision, so we don't offer this one by default. Ask an admin to enable it "
+    "for your account, and you'll get the full reading of the partner's chart and the "
+    "marriage indications."
+)
+
+
+def _match_access(username: str) -> bool:
+    """Whether this user may use the in-depth Kundli AI reading (admins always can)."""
+    email = username.strip().lower()
+    if email in _admin_emails():
+        return True
+    with auth.get_connection() as connection:
+        return auth.has_match_access(connection, email)
+
+
+@app.post("/match/reading")
+def kundli_match_reading(
+    request: MatchReadingRequest, username: str = Depends(authenticated_username)
+) -> dict:
+    """In-depth AI compatibility reading over both full charts (gated + full-only).
+
+    Disabled on the free tier (no full charts, no trimming) and locked per user
+    until an admin grants match access. Consumes a daily question slot like /run,
+    since it calls the paid model."""
+    if not _readings_enabled():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"code": "readings_disabled", "message": _READINGS_DISABLED_MESSAGE},
+        )
+    if not _match_access(username):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "match_access_required", "message": _MATCH_ACCESS_MESSAGE},
+        )
+    person_birth = _birth_for(username)
+    partner_birth = {key: value for key, value in request.partner.model_dump().items()}
+    # Deterministic points + both full charts (the partner's is cached under this
+    # user keyed by the partner's birth, so a repeat reading doesn't recompute it).
+    try:
+        points = match_charts(person_birth, partner_birth, person_is_groom=request.person_is_groom)
+        person_chart = _cached_chart(username, person_birth, "full")
+        partner_chart = _cached_chart(username, partner_birth, "full")
+    except ChartServiceUnavailable as error:
+        raise HTTPException(
+            status_code=503, detail={"code": "chart_service_unavailable", "message": str(error)}
+        ) from error
+    # Charts are ready, so this run will call the paid model: consume a quota slot.
+    budget = _rate_limiter.check_and_consume(username)
+    if not budget.allowed:
+        message = (
+            "Your daily quota is full. Each reading costs us real money to run, so "
+            "questions are limited per day — please come back tomorrow."
+            if budget.scope == "user"
+            else "AstroWeave has reached its daily capacity. Please try again tomorrow."
+        )
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={"code": "rate_limited", "scope": budget.scope, "limit": budget.limit, "message": message},
+            headers={"Retry-After": str(budget.retry_after_seconds or 3600)},
+        )
+    usages: list[dict] = []
+    try:
+        reading = run_match_reading(
+            person_chart, partner_chart, points,
+            person_is_groom=request.person_is_groom, usages=usages,
+        )
+    except MatchReadingError as error:
+        raise HTTPException(status_code=422, detail={"code": "reading_unavailable", "message": str(error)}) from error
+    except Exception as error:  # noqa: BLE001 - clean 502 instead of a 500 traceback
+        logger.exception("Match reading failed")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"AstroWeave could not complete this reading: {error}",
+        ) from error
+    run_cost = 0.0
+    try:
+        run_cost = _usage_store.record_run(username, None, request.message_id, usages)
+    except Exception:  # noqa: BLE001 - never let accounting fail the request
+        logger.exception("Failed to record usage for match reading message_id=%s", request.message_id)
+    return {"points": points, "reading": reading, "cost_usd": round(float(run_cost or 0.0), 6)}
 
 
 @app.post("/auth/change-password")
@@ -685,6 +782,33 @@ def admin_remove_allowlist(email: str, _admin: str = Depends(authenticated_admin
     normalized = email.strip().lower()
     with auth.get_connection() as connection:
         removed = auth.remove_allowed_email(connection, normalized)
+    return {"status": "ok", "email": normalized, "removed": removed}
+
+
+@app.get("/admin/match-access")
+def admin_list_match_access(_admin: str = Depends(authenticated_admin)) -> dict:
+    """Users currently granted the in-depth Kundli AI reading."""
+    with auth.get_connection() as connection:
+        return {"granted": auth.list_match_access(connection)}
+
+
+@app.post("/admin/match-access")
+def admin_grant_match_access(request: AllowlistRequest, admin: str = Depends(authenticated_admin)) -> dict:
+    """Grant a user the in-depth Kundli AI compatibility reading."""
+    email = request.email.strip().lower()
+    if not email:
+        raise HTTPException(status_code=422, detail="An email is required.")
+    with auth.get_connection() as connection:
+        auth.grant_match_access(connection, email, granted_by=admin)
+    return {"status": "ok", "email": email}
+
+
+@app.delete("/admin/match-access/{email}")
+def admin_revoke_match_access(email: str, _admin: str = Depends(authenticated_admin)) -> dict:
+    """Revoke a user's Kundli AI reading access."""
+    normalized = email.strip().lower()
+    with auth.get_connection() as connection:
+        removed = auth.revoke_match_access(connection, normalized)
     return {"status": "ok", "email": normalized, "removed": removed}
 
 

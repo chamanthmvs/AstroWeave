@@ -24,7 +24,7 @@ _DEFAULT_TEMPERATURE = 0.2
 _DEFAULT_MAX_TOKENS = {"anthropic": 64000}
 _FALLBACK_MAX_TOKENS = 4096
 # Specialists do the hard chart judgment; routing and synthesis are lighter work.
-_DEFAULT_EFFORT = {"specialist": "high"}
+_DEFAULT_EFFORT = {"specialist": "high", "match": "high"}
 _FALLBACK_EFFORT = "medium"
 
 

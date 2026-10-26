@@ -84,6 +84,17 @@ access_requests = Table(
     Column("created_at", String, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
 )
 
+# Admin-granted access to the in-depth AI Kundli compatibility reading. Marriage
+# is a serious, life-shaping decision, so this heavier full-chart reading stays
+# locked until an admin explicitly grants it per user.
+match_access = Table(
+    "match_access",
+    _metadata,
+    Column("email", String, primary_key=True),
+    Column("granted_by", String),
+    Column("created_at", String, nullable=False, server_default=text("CURRENT_TIMESTAMP")),
+)
+
 
 def _resolve_engine(db_path: Path | None = None, engine: Engine | None = None) -> Engine:
     """Pick the engine for auth: explicit arg, else DATABASE_URL, else DB_PATH.
@@ -343,6 +354,46 @@ def list_access_requests(connection: Connection) -> list[dict[str, Any]]:
 
 def delete_access_request(connection: Connection, email: str) -> bool:
     result = connection.execute(text("DELETE FROM access_requests WHERE email = :email"), {"email": email})
+    connection.commit()
+    return result.rowcount > 0
+
+
+def has_match_access(connection: Connection, email: str) -> bool:
+    """True if this email has been granted the in-depth Kundli AI reading."""
+    row = connection.execute(
+        text("SELECT 1 FROM match_access WHERE email = :email"), {"email": email}
+    ).first()
+    return row is not None
+
+
+def grant_match_access(connection: Connection, email: str, granted_by: str | None = None) -> None:
+    """Grant an email the in-depth Kundli AI reading (idempotent)."""
+    connection.execute(
+        text(
+            """
+            INSERT INTO match_access (email, granted_by) VALUES (:email, :granted_by)
+            ON CONFLICT (email) DO NOTHING
+            """
+        ),
+        {"email": email, "granted_by": granted_by},
+    )
+    connection.commit()
+    logger.info("Match access granted email=%s by=%s", email, granted_by)
+
+
+def list_match_access(connection: Connection) -> list[dict[str, Any]]:
+    """All emails granted the Kundli AI reading, newest first (admin dashboard)."""
+    rows = connection.execute(
+        text("SELECT email, granted_by, created_at FROM match_access ORDER BY created_at DESC")
+    ).mappings().all()
+    return [dict(row) for row in rows]
+
+
+def revoke_match_access(connection: Connection, email: str) -> bool:
+    """Revoke the Kundli AI reading from an email. Returns False if not present."""
+    result = connection.execute(
+        text("DELETE FROM match_access WHERE email = :email"), {"email": email}
+    )
     connection.commit()
     return result.rowcount > 0
 
