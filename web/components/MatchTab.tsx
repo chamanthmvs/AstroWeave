@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
-import type { MatchReading } from "@/lib/types";
+import type { MatchReading, ReadingSection } from "@/lib/types";
 import BirthFields, { emptyBirth, isGeocoded, type BirthForm } from "./BirthFields";
 
 type Koota = { koota: string; score: number; max: number; favourable: boolean };
@@ -102,7 +102,7 @@ export default function MatchTab() {
     try {
       const res = await api<{ reading: MatchReading }>("/match/reading", {
         method: "POST",
-        timeoutMs: 180000,
+        timeoutMs: 300000, // the deep reading weighs two full charts — allow a couple of minutes
         body: { partner: partnerPayload(), person_is_groom: personIsGroom },
       });
       setReading(res.reading);
@@ -249,7 +249,12 @@ export default function MatchTab() {
                 <ReadingBlock title="Care & respect for a partner" body={reading.care_and_respect} />
                 <ReadingBlock title="Married life" body={reading.married_life} />
                 <ReadingBlock title="In short" body={reading.overall} />
-                <ReadingBlock title="What this can't tell you" body={reading.limits} />
+                {reading.limits && (
+                  <div>
+                    <div className="koota-name">What this can&apos;t tell you</div>
+                    <p className="dim" style={{ marginTop: 4, whiteSpace: "pre-wrap" }}>{reading.limits}</p>
+                  </div>
+                )}
                 <p className="note" style={{ marginTop: 4 }}>
                   Confidence: <b className="dim">{reading.confidence}</b>
                   {reading.confidence_reason ? ` — ${reading.confidence_reason}` : ""}
@@ -261,10 +266,11 @@ export default function MatchTab() {
             ) : (
               <>
                 <button className="btn btn-primary" onClick={getReading} disabled={readingBusy}>
-                  {readingBusy ? "Reading the charts…" : "Generate the in-depth reading"}
+                  {readingBusy ? "Reading both charts… (1–2 min)" : "Generate the in-depth reading"}
                 </button>
                 <p className="note" style={{ marginTop: 8 }}>
-                  Uses both full charts and the paid model, so it counts as one of your daily questions.
+                  Weighs both full charts with the paid model, so it takes a minute or two and counts as one
+                  of your daily questions. Please keep this tab open while it works.
                 </p>
               </>
             )}
@@ -276,12 +282,19 @@ export default function MatchTab() {
   );
 }
 
-function ReadingBlock({ title, body }: { title: string; body: string }) {
-  if (!body) return null;
+function ReadingBlock({ title, body }: { title: string; body: ReadingSection }) {
+  if (!body || (!body.plain && !body.astrology)) return null;
   return (
     <div>
       <div className="koota-name">{title}</div>
-      <p className="dim" style={{ marginTop: 4, whiteSpace: "pre-wrap" }}>{body}</p>
+      {body.plain && (
+        <p className="dim" style={{ marginTop: 4, whiteSpace: "pre-wrap" }}>{body.plain}</p>
+      )}
+      {body.astrology && (
+        <p className="note" style={{ marginTop: 6, whiteSpace: "pre-wrap" }}>
+          <b className="dim">Why we see this (astrology): </b>{body.astrology}
+        </p>
+      )}
     </div>
   );
 }

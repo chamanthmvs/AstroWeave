@@ -95,9 +95,16 @@ leaning on it; a single factor is a possibility, not a trait.
   trait.
 
 ## Response format
-Respond with only a JSON object with these string fields, each a few compact
-grounded paragraphs (or one or two sentences where the chart says little), citing
-specific factors:
+Respond with only a JSON object. Each of the sections below is an object with two
+fields, written in this order:
+- "plain": the finding in everyday language, as you would explain it to someone who
+  knows no astrology — what it means for a real marriage and daily life. No Sanskrit,
+  no house numbers, no planet names here. A few clear sentences.
+- "astrology": *why* the chart says that — the specific factors, named
+  (houses, lords, planets, dignities, dashas, the Guna Milan), in order of weight.
+  This is the evidence behind the plain explanation, so the two must agree.
+Both fields are grounded and honest; where the chart says little, keep them short
+and say so. The sections:
 - "partner_overview": who the PARTNER is in brief — the headline of their chart.
 - "partner_temperament": mind, temperament, emotional nature.
 - "partner_family": family life and the home they come from / make.
@@ -107,7 +114,9 @@ specific factors:
 - "care_and_respect": how likely the PARTNER is to care for and respect their spouse.
 - "married_life": the couple's marriage — harmony, friction, timing, Manglik and the
   Guna Milan in context.
-- "overall": a direct, honest two-to-four-sentence summary for the PERSON.
+- "overall": a direct, honest summary for the PERSON (plain = the bottom line in a
+  few sentences; astrology = the few factors that most drive it).
+And these plain string fields:
 - "confidence": "low", "medium" or "high".
 - "confidence_reason": one or two sentences naming the factors that agree and those
   that conflict or are missing.
@@ -115,27 +124,32 @@ specific factors:
   guidance, not a verdict on a person or a decision to make on points alone."""
 
 
+# Each content section pairs a plain-language explanation with the astrological
+# basis behind it, so the reader gets the meaning first and the "why" second.
+_SECTION = {
+    "type": "object",
+    "properties": {
+        "plain": {"type": "string"},
+        "astrology": {"type": "string"},
+    },
+    "required": ["plain", "astrology"],
+    "additionalProperties": False,
+}
+
+_SECTIONS = [
+    "partner_overview", "partner_temperament", "partner_family", "partner_health",
+    "partner_work", "partner_finances", "care_and_respect", "married_life", "overall",
+]
+
 MATCH_OUTPUT_SCHEMA = {
     "type": "object",
     "properties": {
-        "partner_overview": {"type": "string"},
-        "partner_temperament": {"type": "string"},
-        "partner_family": {"type": "string"},
-        "partner_health": {"type": "string"},
-        "partner_work": {"type": "string"},
-        "partner_finances": {"type": "string"},
-        "care_and_respect": {"type": "string"},
-        "married_life": {"type": "string"},
-        "overall": {"type": "string"},
+        **{name: _SECTION for name in _SECTIONS},
         "confidence": {"type": "string", "enum": ["low", "medium", "high"]},
         "confidence_reason": {"type": "string"},
         "limits": {"type": "string"},
     },
-    "required": [
-        "partner_overview", "partner_temperament", "partner_family", "partner_health",
-        "partner_work", "partner_finances", "care_and_respect", "married_life",
-        "overall", "confidence", "confidence_reason", "limits",
-    ],
+    "required": [*_SECTIONS, "confidence", "confidence_reason", "limits"],
     "additionalProperties": False,
 }
 

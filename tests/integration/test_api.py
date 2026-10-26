@@ -331,12 +331,14 @@ class ApiTests(unittest.TestCase):
     @patch("astroweave.api.main.match_charts", return_value={"north": {"total": 25.5}})
     @patch("astroweave.api.main._match_access", return_value=True)
     def test_match_reading_returns_reading_with_access(self, _access, _points, _chart, reading):
+        section = lambda p, a: {"plain": p, "astrology": a}  # noqa: E731
         reading.return_value = {
-            "partner_overview": "An overview grounded in the chart.",
-            "partner_temperament": "Thoughtful.",
-            "partner_family": "", "partner_health": "", "partner_work": "",
-            "partner_finances": "", "care_and_respect": "", "married_life": "",
-            "overall": "A workable match with some friction.",
+            "partner_overview": section("An easy-going partner.", "Libra lagna, Venus strong."),
+            "partner_temperament": section("Thoughtful.", "Moon in the 3rd."),
+            "partner_family": section("", ""), "partner_health": section("", ""),
+            "partner_work": section("", ""), "partner_finances": section("", ""),
+            "care_and_respect": section("", ""), "married_life": section("", ""),
+            "overall": section("A workable match with some friction.", "7th lords mixed."),
             "confidence": "medium", "confidence_reason": "Factors mixed.", "limits": "Guidance only.",
         }
         with patch("astroweave.api.main._user_profile", return_value={"email": "demo-user", "birth_details": dict(_PARTNER_BIRTH)}):

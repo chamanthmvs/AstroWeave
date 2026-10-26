@@ -18,16 +18,18 @@ export type User = {
   birth_details: BirthDetails;
 };
 
+export type ReadingSection = { plain: string; astrology: string };
+
 export type MatchReading = {
-  partner_overview: string;
-  partner_temperament: string;
-  partner_family: string;
-  partner_health: string;
-  partner_work: string;
-  partner_finances: string;
-  care_and_respect: string;
-  married_life: string;
-  overall: string;
+  partner_overview: ReadingSection;
+  partner_temperament: ReadingSection;
+  partner_family: ReadingSection;
+  partner_health: ReadingSection;
+  partner_work: ReadingSection;
+  partner_finances: ReadingSection;
+  care_and_respect: ReadingSection;
+  married_life: ReadingSection;
+  overall: ReadingSection;
   confidence: "low" | "medium" | "high";
   confidence_reason: string;
   limits: string;

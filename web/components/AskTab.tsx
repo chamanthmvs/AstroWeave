@@ -6,8 +6,10 @@ import type { RunResponse } from "@/lib/types";
 import { useAuth } from "@/lib/auth";
 import CostPanel, { usd } from "./CostPanel";
 
-type Msg = { role: "user" | "assistant"; content: string; trace?: string; cost?: number };
+type Msg = { role: "user" | "assistant"; content: string; trace?: string; cost?: number; startsTopic?: boolean };
 type Quota = { used: number; limit: number | null; remaining: number | null };
+
+const STORE_KEY = "astroweave:ask-thread";
 
 function uuid(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) return crypto.randomUUID();
@@ -19,11 +21,52 @@ export default function AskTab() {
   const [messages, setMessages] = useState<Msg[]>([]);
   const [query, setQuery] = useState("");
   const [methodology, setMethodology] = useState("Let the system decide");
+  const [mode, setMode] = useState<"followup" | "new">("new");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [quotaFull, setQuotaFull] = useState(false);
   const [quota, setQuota] = useState<Quota | null>(null);
   const ids = useRef<{ conversation_id?: string; session_id?: string }>({});
+
+  // Keep the current thread across page refreshes (per browser) so you don't lose
+  // your questions and answers. Server-side history exists too; this is the quick,
+  // local convenience layer.
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (raw) {
+        const saved = JSON.parse(raw) as { messages?: Msg[]; ids?: { conversation_id?: string; session_id?: string } };
+        if (saved.messages?.length) {
+          setMessages(saved.messages);
+          ids.current = saved.ids || {};
+          setMode("followup");
+        }
+      }
+    } catch {
+      /* storage unavailable (private mode, etc.) — thread just won't persist */
+    }
+  }, []);
+
+  useEffect(() => {
+    try {
+      if (messages.length) localStorage.setItem(STORE_KEY, JSON.stringify({ messages, ids: ids.current }));
+      else localStorage.removeItem(STORE_KEY);
+    } catch {
+      /* ignore */
+    }
+  }, [messages]);
+
+  function clearThread() {
+    setMessages([]);
+    ids.current = {};
+    setMode("new");
+    setError("");
+    try {
+      localStorage.removeItem(STORE_KEY);
+    } catch {
+      /* ignore */
+    }
+  }
 
   async function loadQuota() {
     try {
@@ -47,7 +90,11 @@ export default function AskTab() {
     const text = query.trim();
     if (!text || busy) return;
     setError("");
-    setMessages((m) => [...m, { role: "user", content: text }]);
+    // "New question" starts a fresh conversation (standalone, no prior context);
+    // "Follow-up" continues the current one so the model sees earlier Q&A.
+    const startingNew = mode === "new" || messages.length === 0;
+    if (startingNew) ids.current = {};
+    setMessages((m) => [...m, { role: "user", content: text, startsTopic: startingNew && m.length > 0 }]);
     setQuery("");
     setBusy(true);
     try {
@@ -58,11 +105,12 @@ export default function AskTab() {
           query: text,
           methodology,
           message_id: uuid(),
-          conversation_id: ids.current.conversation_id,
-          session_id: ids.current.session_id,
+          conversation_id: startingNew ? undefined : ids.current.conversation_id,
+          session_id: startingNew ? undefined : ids.current.session_id,
         },
       });
       ids.current = { conversation_id: res.conversation_id, session_id: res.session_id };
+      if (mode === "new") setMode("followup"); // after a new topic, keep going as follow-ups
       const consulted = (res.execution_trace || [])
         .filter((s) => s.step === "specialist" && s.specialist)
         .map((s) => s.specialist);
@@ -136,12 +184,17 @@ export default function AskTab() {
 
       <div className="thread">
         {messages.map((m, i) => (
-          <div key={i} className={`bubble ${m.role}`}>
-            {m.content}
-            {m.trace && <div className="trace">{m.trace}</div>}
-            {m.role === "assistant" && m.cost != null && m.cost > 0 && (
-              <div className="trace">This reading cost us ≈ {usd(m.cost)}</div>
+          <div key={i}>
+            {m.startsTopic && (
+              <div className="topic-divider"><span>New question</span></div>
             )}
+            <div className={`bubble ${m.role}`}>
+              {m.content}
+              {m.trace && <div className="trace">{m.trace}</div>}
+              {m.role === "assistant" && m.cost != null && m.cost > 0 && (
+                <div className="trace">This reading cost us ≈ {usd(m.cost)}</div>
+              )}
+            </div>
           </div>
         ))}
         {busy && <div className="bubble assistant">Reading your chart…</div>}
@@ -157,6 +210,34 @@ export default function AskTab() {
         </div>
       ) : (
         <>
+          {messages.length > 0 && (
+            <div className="ask-controls">
+              <div className="seg" role="group" aria-label="Question mode">
+                <button
+                  type="button"
+                  className={mode === "followup" ? "seg-on" : ""}
+                  onClick={() => setMode("followup")}
+                >
+                  Follow-up
+                </button>
+                <button
+                  type="button"
+                  className={mode === "new" ? "seg-on" : ""}
+                  onClick={() => setMode("new")}
+                >
+                  New question
+                </button>
+              </div>
+              <span className="note">
+                {mode === "followup"
+                  ? "Continues this thread — the reading sees your earlier questions."
+                  : "Starts fresh — answered on its own, without the thread above."}
+              </span>
+              <button type="button" className="btn-link" onClick={clearThread} style={{ marginLeft: "auto" }}>
+                Clear thread
+              </button>
+            </div>
+          )}
           {error && <p className="error">{error}</p>}
           <form className="composer card" onSubmit={ask}>
             <textarea
